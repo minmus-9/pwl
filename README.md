@@ -117,6 +117,7 @@ GPL license header):
 |lisp.py  |Add FFI and API                                         |1350|1000|4.710|
 |pylisp.py|Add an FFI-based runtime to lisp.py using its API       | 250| 200|4.676|
 |pwl.py   |Inline all the stdlibs, call pylisp.py and lisp.py      |~800|~700|4.722|
+|oo.py    |OO version of lisp.py                                   |1400|1050|4.449|
 
 The silly benchmark lives in the file `bench.lisp`.
 
@@ -145,8 +146,21 @@ These files all use globals and pure python functions; there are only a few
 classes used in the code. This was done on purpose (a) to facilitate a future
 C port, and (b) to keep things simple and focused. It would be worthwhile to
 do an OO version so that you could have multiple lisp interpreters; this would
-allow its use in hybrid python code libraries, for example. I'll probably do
-this once everything has stabilized for a while.
+allow its use in hybrid python code libraries, for example. I've done a rough
+version in the file `oo.py`. To use it,
+```
+from oo import Lisp, lisp
+
+## lisp is a global Lisp instance and smells like what's in lisp.py.
+print(lisp.execute("(add 1 2)"))
+
+## or make your own
+class MyLisp(Lisp):
+    ...
+
+lisp = MyLisp()
+print(lisp.execute("(add 1 2)"))
+```
 
 ---
 ### easy.py
@@ -289,26 +303,12 @@ This file includes some additions to cont.py:
   deal with the lisp representation of lists I chose"). The files `pylisp.py`
   and `pylisp.lisp` (see below) show how to use the FFI api.
 - A "lisp" class that houses a public api. Everything is a staticmethod,
-  but the door is open for a proper class.
+  but the door is open for the proper class `Lisp` in `oo.py`.
 - Support for using tick (') to quote objects. Also quasiquote, unquote,
   and unquote-splicing have the usual ` , ,@ syntactic sugar.
 
-The api class cannot be instantiated; it's just a namespace to hold a bunch
-of useful symbols. The OO version will look something like
-
-```
-__all__ = ("Lisp", "lisp")
-
-...
-
-class Lisp:
-    ...
-
-lisp = Lisp()
-```
-so things should hopefully continue to work as-is. If you want to play with a
-"vanilla" lisp, this module is probably the one to try; if you want something
-more complete (with string methods in particular), try `pylisp.py` or `pwl.py`.
+This api class cannot be instantiated; it's just a namespace to hold a bunch
+of useful symbols. See `oo.py` below.
 
 ---
 ### pylisp.py
@@ -339,6 +339,14 @@ This file inlines the lisp libraries `stdlib.lisp`, `runtime.lisp`,
 `cont.lisp`, and `pylisp.lisp`. Note that it requires the files `pylisp.py`
 and `lisp.py` in order to run. Just saves some typing. Don't forget to run
 `make` if you change any of the lisp libs (see below).
+
+---
+### oo.py
+
+This module exports a `Lisp` class and a global instance of it, `lisp`. Things
+should hopefully continue to work as-is. If you want to play with a "vanilla"
+lisp, this module is probably the one to try; if you want something more
+complete (with string methods in particular), try `pylisp.py` or `pwl.py`.
 
 ---
 ## Included lisp files
