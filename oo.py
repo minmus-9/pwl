@@ -171,7 +171,9 @@ def listcheck(_, x):
 def symcheck(state, x):
     if not isinstance(x, Symbol):
         ## NB note use of state.globals
-        raise TypeError(f"expected symbol, got {stringify(state, x, state.globals)}")
+        raise TypeError(
+            f"expected symbol, got {stringify(state, x, state.globals)}"
+        )
     return x
 
 
@@ -243,7 +245,9 @@ class Environment(dict):
         self.parent = parent
         variadic = False
         while params is not EL:
-            p, params = symcheck(state, car(state, params)), cdr(state, params)
+            p, params = symcheck(state, car(state, params)), cdr(
+                state, params
+            )
             if p is state.symbol("&"):
                 variadic = True
             elif variadic:
@@ -360,7 +364,9 @@ def op_special_cont(state, value):
         ##    risk beats the heck out of cps error messages.
         ##
         ## NB note use of state.globals
-        raise TypeError(f"expected lambda, got {stringify(state, value, state.globals)}")
+        raise TypeError(
+            f"expected lambda, got {stringify(state, value, state.globals)}"
+        )
     frame = state.fpop()
     value.special = True
     frame.e[symcheck(state, frame.sym)] = value
@@ -408,7 +414,6 @@ GLOBALS[symbol_(None, "#t")] = T
 
 
 def glbl(name):
-
     def wrap(func):
         GLOBALS[symbol_(None, name)] = func
         return func
@@ -443,7 +448,9 @@ def op_callcc(state, frame):
     "(call/cc (lambda (cc) ...))"
     (x,) = unpack(state, frame.x, 1)
     if not callable(x):
-        raise TypeError(f"call/cc expects callable, got {stringify(state, x, state.globals)}")
+        raise TypeError(
+            f"call/cc expects callable, got {stringify(state, x, state.globals)}"
+        )
 
     ## this is really all there is to it. really.
     cc = Continuation(state, frame.c)
@@ -589,7 +596,9 @@ def op_tostring(state, frame):
 def op_tosymbol(state, frame):
     (x,) = unpack(state, frame.x, 1)
     if not isinstance(x, str):
-        raise TypeError(f"expected sym or str, got {stringify(state, x, state.globals)}")
+        raise TypeError(
+            f"expected sym or str, got {stringify(state, x, state.globals)}"
+        )
     return bounce(frame.c, state, state.symbol(x))
 
 
@@ -613,7 +622,9 @@ def lambda_params_done(state, paramstr):
     body = frame.x
 
     state.fpush(frame, x=paramstr)
-    return bounce(stringify_, state, Struct(frame, x=body, c=lambda_body_done))
+    return bounce(
+        stringify_, state, Struct(frame, x=body, c=lambda_body_done)
+    )
 
 
 class Lambda:
@@ -631,10 +642,12 @@ class Lambda:
         e = Environment(self.state, self.params, args, parent)
         return bounce(leval_, self.state, Struct(frame, x=self.body, e=e))
 
-    def as_str_(self, state, frame):
+    def as_str_(self, _, frame):
         self.state.fpush(frame, x=self.body)
         return bounce(
-            stringify_, self.state, Struct(frame, x=self.params, c=lambda_params_done)
+            stringify_,
+            self.state,
+            Struct(frame, x=self.params, c=lambda_params_done),
         )
 
 
@@ -697,7 +710,9 @@ def stringify_(state, frame):
     if isinstance(x, (Symbol, int, float)):  ## check Symbol here...
         return bounce(frame.c, state, str(x))
     if isinstance(x, str):  ## ... and str here
-        return bounce(frame.c, state, '"' + repr(x)[1:-1].replace('"', '\\"') + '"')
+        return bounce(
+            frame.c, state, '"' + repr(x)[1:-1].replace('"', '\\"') + '"'
+        )
     if isinstance(x, Lambda):
         return bounce(x.as_str_, state, Struct(frame, x=x))
     if isinstance(x, Continuation):
@@ -795,7 +810,6 @@ FFI_REGISTRY = {}
 
 
 def ffi(name=None):
-
     def wrap(func):
         n = name or func.__name__
         FFI_REGISTRY[n] = func
@@ -805,7 +819,9 @@ def ffi(name=None):
 
 
 def lisp_value_to_py_value(state, x):
-    return trampoline(lisp_value_to_py_value_, state, Struct(x=x, e=None, c=land))[1]
+    return trampoline(
+        lisp_value_to_py_value_, state, Struct(x=x, e=None, c=land)
+    )[1]
 
 
 def lv2pv_setup(state, frame, args):
@@ -851,7 +867,9 @@ def lisp_value_to_py_value_(state, frame):
 
 
 def py_value_to_lisp_value(state, x):
-    return trampoline(py_value_to_lisp_value_, state, Struct(x=x, e=None, c=land))[1]
+    return trampoline(
+        py_value_to_lisp_value_, state, Struct(x=x, e=None, c=land)
+    )[1]
 
 
 def pv2lv_setup(state, frame, args):
@@ -909,7 +927,9 @@ def op_py_ffi(state, frame):
     if isinstance(x, Symbol):
         x = str(x)
     elif not isinstance(x, str):
-        raise TypeError(f"expected sym or str, got {stringify(state, x, state.globals)}")
+        raise TypeError(
+            f"expected sym or str, got {stringify(state, x, state.globals)}"
+        )
     func = FFI_REGISTRY.get(x)
     if func is None:
         raise ValueError(f"function {x!r} is unknown to ffi")
@@ -920,7 +940,9 @@ def op_py_ffi(state, frame):
         return bounce(ffi_args_done, state, [])
 
     return bounce(
-        lisp_value_to_py_value_, state, Struct(frame, x=list(args), c=ffi_args_done)
+        lisp_value_to_py_value_,
+        state,
+        Struct(frame, x=list(args), c=ffi_args_done),
     )
 
 
@@ -1057,7 +1079,6 @@ class Parser:
             self.state.symbol(",@"): self.state.symbol("unquote-splicing"),
         }
 
-
     def process_token(self, ttype, token):
         if ttype == self.scanner.T_SYM:
             self.add(self.state.symbol(token))
@@ -1090,7 +1111,10 @@ class Parser:
             raise RuntimeError((ttype, token))
 
     def add(self, x):
-        syntaxcheck(self.stack, f"expected '(' got {stringify(self.state, x, self.state.globals)}")
+        syntaxcheck(
+            self.stack,
+            f"expected '(' got {stringify(self.state, x, self.state.globals)}",
+        )
         self.stack[-1].append(x)
 
     def filter(self, sexpr):
@@ -1164,7 +1188,11 @@ def main(force_repl=False):
             value = leval(state, sexpr, state.globals)
         except:
             print("Offender (pyth):", sexpr)
-            print("Offender (lisp):", stringify(state, sexpr, state.globals), "\n")
+            print(
+                "Offender (lisp):",
+                stringify(state, sexpr, state.globals),
+                "\n",
+            )
             raise
         if value is not EL:
             print(stringify(state, value, state.globals))
@@ -1209,8 +1237,10 @@ def main(force_repl=False):
 
 
 class Lisp:
+    ## pylint: disable=too-many-public-methods
+
     def __init__(self):
-        self.stack = EL ## runtime stack
+        self.stack = EL  ## runtime stack
         self.specials_ = Environment(self, EL, EL, None)
         self.specials_.update(SPECIALS)
         self.specials = Environment(self, EL, EL, self.specials_)
