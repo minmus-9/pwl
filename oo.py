@@ -1181,24 +1181,23 @@ def repl(state, callback):
 
 
 def main(force_repl=False):
-    state = Lisp()
 
     def callback(sexpr):
         try:
-            value = leval(state, sexpr, state.globals)
+            value = leval(lisp, sexpr, lisp.globals)
         except:
             print("Offender (pyth):", sexpr)
             print(
                 "Offender (lisp):",
-                stringify(state, sexpr, state.globals),
+                stringify(lisp, sexpr, lisp.globals),
                 "\n",
             )
             raise
         if value is not EL:
-            print(stringify(state, value, state.globals))
+            print(stringify(lisp, value, lisp.globals))
 
     def eat(src):
-        p = Parser(state, callback)
+        p = Parser(lisp, callback)
         p.feed(src)
         p.feed(None)
 
@@ -1229,7 +1228,7 @@ def main(force_repl=False):
         load(filename)
         stop = True
     if force_repl or not stop:
-        raise SystemExit(repl(state, callback))
+        raise SystemExit(repl(lisp, callback))
 
 
 ## }}}
