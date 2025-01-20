@@ -340,6 +340,7 @@ def op_lambda(state, frame):
 ## (special) doesn't quite get the job done due to the way its env works.
 ## it ain't the same as a recursive scheme macro :-)
 
+
 def qq_list_setup(state, frame, form):
     elt, form = car(state, form), cdr(state, form)
     state.fpush(frame, x=form)
@@ -375,8 +376,7 @@ def qq_spliced(state, value):
     if value is EL:
         if form is EL:
             return bounce(qq_finish, state, frame, SENTINEL)
-        else:
-            return qq_list_setup(state, frame, form)
+        return qq_list_setup(state, frame, form)
 
     listcheck(state, value)
     while value is not EL:
@@ -391,18 +391,13 @@ def qq_spliced(state, value):
 
 def qq_list_next(state, frame):
     elt = frame.x
-    f = state.fpop()
-    state.fpush(f)
-    form = f.x
 
-    if (
-        isinstance(elt, list)
-        and car(state, elt) is state.symbol("unquote-splicing")
+    if isinstance(elt, list) and car(state, elt) is state.symbol(
+        "unquote-splicing"
     ):
         _, x = unpack(state, elt, 2)
         return bounce(leval_, state, Struct(frame, x=x, c=qq_spliced))
-    else:
-        return bounce(qq, state, Struct(frame, x=elt, c=qq_list_cont))
+    return bounce(qq, state, Struct(frame, x=elt, c=qq_list_cont))
 
 
 def qq_list(state, frame):
@@ -724,13 +719,13 @@ def op_type(state, frame):
 
 @glbl("unquote")
 def op_unquote(state, frame):
-    (x,) = unpack(state, frame.x, 1)
+    (_,) = unpack(state, frame.x, 1)
     raise LispError("cannot unquote here")
 
 
 @glbl("unquote-splicing")
 def op_unquote_splicing(state, frame):
-    (x,) = unpack(state, frame.x, 1)
+    (_,) = unpack(state, frame.x, 1)
     raise LispError("cannot unquote-splicing here")
 
 
@@ -1307,7 +1302,6 @@ def repl(state, callback):
 
 
 def main(force_repl=False):
-
     def callback(sexpr):
         try:
             value = leval(lisp, sexpr, lisp.globals)

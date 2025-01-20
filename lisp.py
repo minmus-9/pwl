@@ -348,6 +348,104 @@ def op_lambda(frame):
     return bounce(frame.c, Lambda(params, body, frame.e))
 
 
+## this follows https://blog.veitheller.de/Lets_Build_a_Quasiquoter.html
+## (special) doesn't quite get the job done due to the way its env works.
+## it ain't the same as a recursive scheme macro :-)
+
+def qq_list_setup(frame, form):
+    elt, form = car(form), cdr(form)
+    fpush(frame, x=form)
+    return bounce(qq_list_next, Struct(frame, x=elt, c=qq_list_cont))
+
+
+def qq_finish(frame, value):
+    res = EL if value is SENTINEL else cons(value, EL)
+    while True:
+        f = fpop()
+        if f.x is SENTINEL:
+            break
+        res = cons(f.x, res)
+    return bounce(frame.c, res)
+
+
+def qq_list_cont(value):
+    frame = fpop()
+    form = frame.x
+
+    if form is EL:
+        return qq_finish(frame, value)
+
+    fpush(frame, x=value)
+
+    return qq_list_setup(frame, form)
+
+
+def qq_spliced(value):
+    frame = fpop()
+    form = frame.x
+
+    if value is EL:
+        if form is EL:
+            return bounce(qq_finish, frame, SENTINEL)
+        return qq_list_setup(frame, form)
+
+    listcheck(value)
+    while value is not EL:
+        elt, value = car(value), cdr(value)
+        if value is EL:
+            fpush(frame, x=form)
+            return qq_list_cont(elt)
+        fpush(frame, x=elt)
+
+    raise RuntimeError()
+
+
+def qq_list_next(frame):
+    elt = frame.x
+
+    if (
+        isinstance(elt, list)
+        and car(elt) is symbol("unquote-splicing")
+    ):
+        _, x = unpack(elt, 2)
+        return bounce(leval_, Struct(frame, x=x, c=qq_spliced))
+    return bounce(qq, Struct(frame, x=elt, c=qq_list_cont))
+
+
+def qq_list(frame):
+    form = frame.x
+    app = car(form)
+
+    if app is symbol("quasiquote"):
+        _, x = unpack(form, 2)
+        return bounce(qq, Struct(frame, x=x))
+
+    if app is symbol("unquote"):
+        _, x = unpack(form, 2)
+        return bounce(leval_, Struct(frame, x=x))
+
+    if app is symbol("unquote-splicing"):
+        _, x = unpack(form, 2)
+        raise LispError("cannot use unquote-splicing here")
+
+    fpush(frame, x=SENTINEL)
+
+    return qq_list_setup(frame, form)
+
+
+def qq(frame):
+    form = frame.x
+    if isinstance(form, list):
+        return bounce(qq_list, frame)
+    return bounce(frame.c, form)
+
+
+@spcl("quasiquote")
+def op_quasiquote(frame):
+    (form,) = unpack(frame.x, 1)
+    return bounce(qq, Struct(frame, x=form))
+
+
 @spcl("quote")
 def op_quote(frame):
     (x,) = unpack(frame.x, 1)
@@ -594,13 +692,13 @@ def op_sub(frame):
 
 @glbl(">float")
 def op_tofloat(state, frame):
-    (x,) = unpack(state, frame.x, 1)
+    (x,) = unpack(frame.x, 1)
     return bounce(frame.c, state, float(x))
 
 
 @glbl(">int")
 def op_toint(state, frame):
-    (x,) = unpack(state, frame.x, 1)
+    (x,) = unpack(frame.x, 1)
     return bounce(frame.c, state, int(x))
 
 
@@ -621,6 +719,18 @@ def op_tosymbol(frame):
 @glbl("type")
 def op_type(frame):
     return unary(frame, ltype)
+
+
+@glbl("unquote")
+def op_unquote(frame):
+    (_,) = unpack(frame.x, 1)
+    raise LispError("cannot unquote here")
+
+
+@glbl("unquote-splicing")
+def op_unquote_splicing(frame):
+    (_,) = unpack(frame.x, 1)
+    raise LispError("cannot unquote-splicing here")
 
 
 # }}}
