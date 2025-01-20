@@ -340,7 +340,8 @@ def op_lambda(state, frame):
 ## (special) doesn't quite get the job done due to the way its env works.
 ## it ain't the same as a recursive scheme macro :-)
 
-def qq_list(state, frame, form):
+def qq_list(state, frame):
+    form = frame.x
     app = car(state, form)
     if app is state.symbol("quasiquote"):
         return qq(state, Struct(frame, x=car(state, cdr(state, form))))
@@ -371,7 +372,7 @@ def qq_list(state, frame, form):
 def qq(state, frame):
     form = frame.x
     if isinstance(form, list):
-        return qq_list(state, frame, form)
+        return qq_list(state, frame)
     return form
 
 
