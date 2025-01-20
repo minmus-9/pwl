@@ -356,25 +356,29 @@ def qq_list(state, frame):
         _, x = unpack(state, form, 2)
         raise LispError("cannot use unquote-splicing here")
 
-    lb = ListBuilder(state)
+    state.fpush(x=SENTINEL)
     while form is not EL:
         elt, form = car(state, form), cdr(state, form)
         if (
             isinstance(elt, list)
-            and cdr(state, elt) is not EL
-            and cdr(state, cdr(state, elt)) is EL
             and car(state, elt) is state.symbol("unquote-splicing")
         ):
-            if not isinstance(elts, list):
-                elts = leval(state, car(state, cdr(state, elt)), frame.e)
+            _, x = unpack(state, elt, 2)
+            elts = leval(state, x, frame.e)
             listcheck(state, elts)
             while elts is not EL:
                 elt, elts = car(state, elts), cdr(state, elts)
-                lb.append(elt)
+                state.fpush(x=elt)
         else:
             elt = qq(state, Struct(frame, x=elt))
-            lb.append(elt)
-    return lb.get()
+            state.fpush(x=elt)
+    res = EL
+    while True:
+        f = state.fpop()
+        if f.x is SENTINEL:
+            break
+        res = cons(state, f.x, res)
+    return res
 
 
 def qq(state, frame):
