@@ -160,8 +160,8 @@
 (print 'L l)
 (define w ())
 (define z (lambda (v e) ( do
-  (print 'QQ `(set! ,v (add 1 ,e)))
-      (eval  `(set! ,v (add 1 ,e)))
+  (print 'QQ `(set! ,v (add 1 ,e ,@l ,@(list 3 4))))
+      (eval  `(set! ,v (add 1 ,e ,@l ,@(list 3 4))))
 )))
 (print 'W w)
 (z 'w 121)

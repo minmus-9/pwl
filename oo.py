@@ -343,29 +343,36 @@ def op_lambda(state, frame):
 def qq_list(state, frame):
     form = frame.x
     app = car(state, form)
+
     if app is state.symbol("quasiquote"):
-        return qq(state, Struct(frame, x=car(state, cdr(state, form))))
+        _, x = unpack(state, form, 2)
+        return qq(state, Struct(frame, x=x))
+
     if app is state.symbol("unquote"):
-        if cdr(state, cdr(state, form)) is EL:
-            return leval(state, car(state, cdr(state, form)), frame.e)
-        raise LispError("unquote takes a single arg")
+        _, x = unpack(state, form, 2)
+        return leval(state, x, frame.e)
+
     if app is state.symbol("unquote-splicing"):
-        if cdr(state, cdr(state, form)) is EL:
-            raise LispError("cannot use unquote-splicing here")
-        raise LispError("unquote-splicing takes a single arg")
+        _, x = unpack(state, form, 2)
+        raise LispError("cannot use unquote-splicing here")
+
     lb = ListBuilder(state)
     while form is not EL:
         elt, form = car(state, form), cdr(state, form)
         if (
             isinstance(elt, list)
+            and cdr(state, elt) is not EL
             and cdr(state, cdr(state, elt)) is EL
-            and elt is state.symbol("unquote-splicing")
+            and car(state, elt) is state.symbol("unquote-splicing")
         ):
-            lb.extend(
-                leval(state, car(state, cdr(state, elt)), frame.e)
-            )
+            elts = leval(state, car(state, cdr(state, elt)), frame.e)
+            listcheck(state, elts)
+            while elts is not EL:
+                elt, elts = car(state, elts), cdr(state, elts)
+                lb.append(elt)
         else:
-            lb.append(qq(state, Struct(frame, x=elt)))
+            elt = qq(state, Struct(frame, x=elt))
+            lb.append(elt)
     return lb.get()
 
 
