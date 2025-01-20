@@ -336,6 +336,50 @@ def op_lambda(state, frame):
     return bounce(frame.c, state, Lambda(params, body, frame.e))
 
 
+## this follows https://blog.veitheller.de/Lets_Build_a_Quasiquoter.html
+## (special) doesn't quite get the job done due to the way its env works.
+## it ain't the same as a recursive scheme macro :-)
+
+def qq_list(state, frame, form):
+    app = car(state, form)
+    if app is state.symbol("quasiquote"):
+        return qq(state, frame, car(state, cdr(state, form)))
+    if app is state.symbol("unquote"):
+        if cdr(state, cdr(state, form)) is EL:
+            return leval(state, car(state, cdr(state, form)), frame.e)
+        raise LispError("unquote takes a single arg")
+    if app is state.symbol("unquote-splicing"):
+        if cdr(state, cdr(state, form)) is EL:
+            raise LispError("cannot use unquote-splicing here")
+        raise LispError("unquote-splicing takes a single arg")
+    lb = ListBuilder(state)
+    while form is not EL:
+        elt, form = car(state, form), cdr(state, form)
+        if (
+            isinstance(elt, list)
+            and cdr(state, cdr(state, elt)) is EL
+            and elt is state.symbol("unquote-splicing")
+        ):
+            lb.extend(
+                leval(state, car(state, cdr(state, elt)), frame.e)
+            )
+        else:
+            lb.append(qq(state, frame, elt))
+    return lb.get()
+
+
+def qq(state, frame, form):
+    if isinstance(form, list):
+        return qq_list(state, frame, form)
+    return form
+
+
+@spcl("quasiquote")
+def op_quasiquote(state, frame):
+    (form,) = unpack(state, frame.x, 1)
+    return bounce(frame.c, state, qq(state, frame, form))
+
+
 @spcl("quote")
 def op_quote(state, frame):
     (x,) = unpack(state, frame.x, 1)
@@ -617,6 +661,18 @@ def op_tosymbol(state, frame):
 @glbl("type")
 def op_type(state, frame):
     return unary(state, frame, lambda x: ltype(state, x))
+
+
+@glbl("unquote")
+def op_unquote(state, frame):
+    (x,) = unpack(state, frame.x, 1)
+    raise LispError("cannot unquote here")
+
+
+@glbl("unquote-splicing")
+def op_unquote_splicing(state, frame):
+    (x,) = unpack(state, frame.x, 1)
+    raise LispError("cannot unquote-splicing here")
 
 
 # }}}

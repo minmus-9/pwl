@@ -83,68 +83,6 @@
     (LB (quote get))
 )))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; quasiquote - this completely blew my mind. see:
-;;;
-;;;     https://blog.veitheller.de/Lets_Build_a_Quasiquoter.html
-
-(special quasiquote (lambda (__special_quasiquote_form__) (do
-    (print 'QQ __special_quasiquote_form__)
-    (quasiquote- __special_quasiquote_form__)
-)))
-
-(define quasiquote- (lambda (form) ( do
-    (cond
-        ((and (list? form) (gt? (length form) 0))
-            (quasiquote-list form))
-        (#t form)
-    )
-)))
-
-(define quasiquote-list (lambda (form) (do
-    (define app (car form))
-
-    ;; you want to use list-builder (see lb.lisp) here because
-    ;; fold-left generates elements in order. you *need* them
-    ;; evaluated in order, too! which means you can't just cons
-    ;; things together
-    (define z (lambda (lb elem) (
-        if
-            (and
-                (list? elem)
-                (equal? (length elem) 2)
-                (eq? (car elem) (quote unquote-splicing)))
-            (lb (quote extend) (eval (cadr elem)))
-            (lb (quote add) (quasiquote- elem))
-    )))
-
-    (cond
-        ((and (eq? app (quote quasiquote))
-              (equal? (length form) 2))
-           (quasiquote- (cadr form)))
-        ((eq? app (quote quasiquote)) (error "quasiquote takes a single arg"))
-
-        ((and (eq? app (quote unquote))
-              (equal? (length form) 2))
-           (eval (cadr form)))
-        ((eq? app (quote unquote)) (error "unquote takes a single arg"))
-
-        ((and (eq? app (quote unquote-splicing))
-              (equal? (length form) 2))
-           (error "unquote-splicing must appear in list context"))
-        ((eq? app (quote unquote-splicing))
-             (error "unquote-splicing takes a single arg"))
-
-        (#t ((fold-left z (list-builder) form) (quote get)))
-    )
-)))
-
-(define unquote (lambda (x) (error "can only unquote inside quasiquote")))
-
-(define unquote-splicing (lambda (x) (
-    error "can only unquote-splicing inside quasiquote"
-)))
-
 ;; save some (eval (join (quote (sym)) args)) awkwardness
 (special eval-flattened (lambda (sym & args) ( do
     (define lb (list-builder))
