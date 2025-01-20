@@ -340,58 +340,103 @@ def op_lambda(state, frame):
 ## (special) doesn't quite get the job done due to the way its env works.
 ## it ain't the same as a recursive scheme macro :-)
 
+def qq_list_setup(state, frame, form):
+    elt, form = car(state, form), cdr(state, form)
+    state.fpush(frame, x=form)
+    return bounce(qq_list_next, state, Struct(frame, x=elt, c=qq_list_cont))
+
+
+def qq_finish(state, frame, value):
+    res = EL if value is SENTINEL else cons(state, value, EL)
+    while True:
+        f = state.fpop()
+        if f.x is SENTINEL:
+            break
+        res = cons(state, f.x, res)
+    return bounce(frame.c, state, res)
+
+
+def qq_list_cont(state, value):
+    frame = state.fpop()
+    form = frame.x
+
+    if form is EL:
+        return qq_finish(state, frame, value)
+
+    state.fpush(frame, x=value)
+
+    return qq_list_setup(state, frame, form)
+
+
+def qq_spliced(state, value):
+    frame = state.fpop()
+    form = frame.x
+
+    if value is EL:
+        if form is EL:
+            return bounce(qq_finish, state, frame, SENTINEL)
+        else:
+            return qq_list_setup(state, frame, form)
+
+    listcheck(state, value)
+    while value is not EL:
+        elt, value = car(state, value), cdr(state, value)
+        if value is EL:
+            state.fpush(frame, x=form)
+            return qq_list_cont(state, elt)
+        state.fpush(frame, x=elt)
+
+    raise RuntimeError()
+
+
+def qq_list_next(state, frame):
+    elt = frame.x
+    f = state.fpop()
+    state.fpush(f)
+    form = f.x
+
+    if (
+        isinstance(elt, list)
+        and car(state, elt) is state.symbol("unquote-splicing")
+    ):
+        _, x = unpack(state, elt, 2)
+        return bounce(leval_, state, Struct(frame, x=x, c=qq_spliced))
+    else:
+        return bounce(qq, state, Struct(frame, x=elt, c=qq_list_cont))
+
+
 def qq_list(state, frame):
     form = frame.x
     app = car(state, form)
 
     if app is state.symbol("quasiquote"):
         _, x = unpack(state, form, 2)
-        return qq(state, Struct(frame, x=x))
+        return bounce(qq, state, Struct(frame, x=x))
 
     if app is state.symbol("unquote"):
         _, x = unpack(state, form, 2)
-        return leval(state, x, frame.e)
+        return bounce(leval_, state, Struct(frame, x=x))
 
     if app is state.symbol("unquote-splicing"):
         _, x = unpack(state, form, 2)
         raise LispError("cannot use unquote-splicing here")
 
     state.fpush(frame, x=SENTINEL)
-    while form is not EL:
-        elt, form = car(state, form), cdr(state, form)
-        if (
-            isinstance(elt, list)
-            and car(state, elt) is state.symbol("unquote-splicing")
-        ):
-            _, x = unpack(state, elt, 2)
-            elts = leval(state, x, frame.e)
-            listcheck(state, elts)
-            while elts is not EL:
-                elt, elts = car(state, elts), cdr(state, elts)
-                state.fpush(frame, x=elt)
-        else:
-            elt = qq(state, Struct(frame, x=elt))
-            state.fpush(frame, x=elt)
-    res = EL
-    while True:
-        f = state.fpop()
-        if f.x is SENTINEL:
-            break
-        res = cons(state, f.x, res)
-    return res
+
+    return qq_list_setup(state, frame, form)
 
 
 def qq(state, frame):
     form = frame.x
     if isinstance(form, list):
-        return qq_list(state, frame)
-    return form
+        return bounce(qq_list, state, frame)
+    return bounce(frame.c, state, form)
 
 
 @spcl("quasiquote")
 def op_quasiquote(state, frame):
     (form,) = unpack(state, frame.x, 1)
-    return bounce(frame.c, state, qq(state, Struct(frame, x=form)))
+    return bounce(qq, state, Struct(frame, x=form))
 
 
 @spcl("quote")
@@ -1309,7 +1354,11 @@ def main(force_repl=False):
         load(filename)
         stop = True
     if force_repl or not stop:
-        raise SystemExit(repl(lisp, callback))
+        try:
+            raise SystemExit(repl(lisp, callback))
+        finally:
+            if lisp.stack is not EL:
+                print("STACK", lisp.stack)
 
 
 ## }}}
