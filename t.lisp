@@ -162,6 +162,8 @@
 (define z (lambda (v e) ( do
   (print 'QQ `(set! ,v (add 1 ,e ,@l ,@(list 3 4))))
       (eval  `(set! ,v (add 1 ,e ,@l ,@(list 3 4))))
+
+  (orubt 'QQ `(set! ,v (add 1 ,e ,@l ,@(list) 17)))
       (eval  `(set! ,v (add 1 ,e ,@l ,@(list) 17)))
 )))
 (print 'W w)
