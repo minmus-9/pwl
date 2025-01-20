@@ -157,16 +157,10 @@
 ;;
 
 (define v 'a) (define e 97)
+(define w ())
 (define z (lambda (v e) ( do
-    (print 'VE v e)
-    (print 'QQ `(define ,v ,e))  ;; wth. oh...
+    (eval `(set! ,v ,e))
 )))
-(print z)
-(z 'z 122)
-;; ... the env inside the lambda - the one that contains
-;;     v and e - doesn't exist when quasiquote runs; instead,
-;;     quasiquote sees the env containing the lambda defn.
-;;     the v,e env only exists once the lambda is actually
-;;     called...
-;; ... now what's up with the string eval failing? weird...
-;; ... 
+(print w)
+(z 'w 121)
+(print w)
