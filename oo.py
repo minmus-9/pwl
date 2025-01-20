@@ -340,65 +340,18 @@ def op_lambda(state, frame):
 ## (special) doesn't quite get the job done due to the way its env works.
 ## it ain't the same as a recursive scheme macro :-)
 
-def qq_list_setup(state, frame, form):
-    elt, form = car(state, form), cdr(state, form)
-    state.fpush(frame, x=form)
-    return bounce(qq_list_elt, state, Struct(frame, x=elt, c=qq_list_elt_done))
-
-
-def qq_list_elt_done(state, value):
-    frame = state.fpop()
-    form = frame.x
-
-    if form is EL:
-        res = cons(state, value, EL)
-        while True:
-            f = state.fpop()
-            if f.x is SENTINEL:
-                break
-            res = cons(f.x, res)
-        return bounce(frame.c, state, res)
-
-    return qq_list_setup(state, frame, form)
-
-
-def qq_list_elt(state, frame):
-    elt = frame.x
-
-    if (
-        isinstance(elt, list)
-        and cdr(state, elt) is not EL
-        and cdr(state, cdr(state, elt)) is EL
-        and car(state, elt) is state.symbol("unquote-splicing")
-    ):
-        lst = car(state, cdr(state, elt))
-        raise LispError("unquote-splicing not implemented")
-    else:
-        return bounce(qq, state, Struct(frame, x=elt, c=qq_list_elt_done))
-
-
-def qq_list(state, frame):
-    form = frame.x
+def qq_list(state, frame, form):
     app = car(state, form)
-
     if app is state.symbol("quasiquote"):
-        _, x = unpack(state, form, 2)
-        return bounce(qq, state, Struct(frame, x=x))
-
+        return qq(state, Struct(frame, x=car(state, cdr(state, form))))
     if app is state.symbol("unquote"):
-        _, x = unpack(state, form, 2)
-        return bounce(leval_, state, Struct(frame, x=x))
-
+        if cdr(state, cdr(state, form)) is EL:
+            return leval(state, car(state, cdr(state, form)), frame.e)
+        raise LispError("unquote takes a single arg")
     if app is state.symbol("unquote-splicing"):
-        _, x = unpack(state, form, 2)
-        raise LispError("cannot use unquote-splicing here")
-
-    if form is EL:
-        return bounce(frame.c, state, EL)
-
-    state.fpush(frame, x=SENTINEL)
-    return qq_list_setup(state, frame, form)
-
+        if cdr(state, cdr(state, form)) is EL:
+            raise LispError("cannot use unquote-splicing here")
+        raise LispError("unquote-splicing takes a single arg")
     lb = ListBuilder(state)
     while form is not EL:
         elt, form = car(state, form), cdr(state, form)
@@ -418,14 +371,14 @@ def qq_list(state, frame):
 def qq(state, frame):
     form = frame.x
     if isinstance(form, list):
-        return bounce(qq_list, state, frame)
-    return bounce(frame.c, state, form)
+        return qq_list(state, frame, form)
+    return form
 
 
 @spcl("quasiquote")
 def op_quasiquote(state, frame):
     (form,) = unpack(state, frame.x, 1)
-    return bounce(qq, state, Struct(frame, x=form))
+    return bounce(frame.c, state, qq(state, Struct(frame, x=form)))
 
 
 @spcl("quote")

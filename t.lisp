@@ -156,11 +156,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
-(define v 'a) (define e 97)
+(define v 'a) (define e 97) (define l '(1 2))
+(print 'L l)
 (define w ())
 (define z (lambda (v e) ( do
-    (eval `(set! ,v ,e))
+  (print 'QQ `(set! ,v (add 1 ,e)))
+      (eval  `(set! ,v (add 1 ,e)))
 )))
-(print w)
+(print 'W w)
 (z 'w 121)
-(print w)
+(print 'W w)
