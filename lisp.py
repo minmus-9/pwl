@@ -592,6 +592,18 @@ def op_sub(frame):
     return binary(frame, lambda x, y: x - y)
 
 
+@glbl(">float")
+def op_tofloat(state, frame):
+    (x,) = unpack(state, frame.x, 1)
+    return bounce(frame.c, state, float(x))
+
+
+@glbl(">int")
+def op_toint(state, frame):
+    (x,) = unpack(state, frame.x, 1)
+    return bounce(frame.c, state, int(x))
+
+
 @glbl(">string")
 def op_tostring(frame):
     (x,) = unpack(frame.x, 1)
@@ -1253,7 +1265,7 @@ class lisp:
         name = symbol(str(name))
         try:
             return env.find(name)[name]
-        except KeyError:
+        except NameError:
             return None
 
     @staticmethod

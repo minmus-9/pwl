@@ -88,9 +88,10 @@
 ;;;
 ;;;     https://blog.veitheller.de/Lets_Build_a_Quasiquoter.html
 
-(special quasiquote (lambda (form)
-    (quasiquote- form)
-))
+(special quasiquote (lambda (__special_quasiquote_form__) (do
+    (print 'QQ __special_quasiquote_form__)
+    (quasiquote- __special_quasiquote_form__)
+)))
 
 (define quasiquote- (lambda (form) ( do
     (cond
@@ -113,8 +114,8 @@
                 (list? elem)
                 (equal? (length elem) 2)
                 (eq? (car elem) (quote unquote-splicing)))
-                (lb (quote extend) (eval (cadr elem)))
-                (lb (quote add) (quasiquote- elem))
+            (lb (quote extend) (eval (cadr elem)))
+            (lb (quote add) (quasiquote- elem))
     )))
 
     (cond

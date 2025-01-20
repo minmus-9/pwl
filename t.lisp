@@ -20,6 +20,10 @@
 ;;
 ;; this file is just for fiddling around
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; playing with quasiquote impl
+
 (special qq (lambda (form) (qq$guts form)))
 
 (define qq$guts (lambda (form)
@@ -63,7 +67,9 @@
 (define y (quote (17 31))) (define x 11) (print (qq (add (sub 0 (uq x)) (ux y) 2)))
 ;(print `(add (sub 0 ,x) ,@y 2))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; continuation based factorial
 
 (define ! (lambda (n) ( do
     (define cont ())
@@ -79,6 +85,89 @@
 ;(print (! 10000))
 (print (! 1000))  ;; got sick of waiting every time i run this
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; rational number arithmetic
+
+(define gcd (lambda (x y)
+    (cond
+        ((lt? x y) (gcd y x))
+        ((equal? x 0) 1)
+        ((equal? y 0) x)
+        (#t ( do
+            (define z (mod x y))
+            (gcd y z)
+        ))
+    )
+))
+
+(define rat (lambda (x y) ( do
+    (define z (gcd x y))
+    (set! x (div x z))
+    (set! y (div y z))
+    (cond ((lt? y 0) (do
+        (set! x (neg x))
+        (set! y (neg y)))
+    ))
+    (cond ((equal? x 0) (set! y 1)))
+    (define dispatch (lambda (op & args) ( do
+        (cond
+            ((eq? op 'num) x)
+            ((eq? op 'den) y)
+            ((eq? op 'get) (list x y))
+
+            ((eq? op 'neg) (rat (neg x) y))
+            ((eq? op 'float) (div (>float x) y))
+            ((eq? op 'recip) (rat y x))
+
+            ((eq? op 'add) (do
+                (define other (car args))
+                (let
+                    ((n1 (dispatch 'num))
+                     (n2 (other 'num))
+                     (d1 (dispatch 'den))
+                     (d2 (other 'den)))
+                    (let    ;; XXX need to write letrec
+                        ((num (add (mul n1 d2) (mul n2 d1)))
+                         (den (mul d1 d2)))
+                      (rat num den)
+                    )
+                )
+            ))
+            ((eq? op 'mul) (do
+                (define other (car args))
+                (let
+                    ((n1 (dispatch 'num))
+                     (n2 (other 'num))
+                     (d1 (dispatch 'den))
+                     (d2 (other 'den)))
+                    (rat (mul n1 n2) (mul d1 d2))
+                )
+            ))
+
+            ((eq? op 'div) (dispatch 'mul ((car args) 'recip)))
+            ((eq? op 'sub) (dispatch 'add ((car args) 'neg)))
+        )
+    )))
+    dispatch
+)))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+
+(define v 'a) (define e 99)
+(define z (lambda (v e) ( do
+    (print v e)
+    (print `(define ,v ,e))  ;; wth. oh...
+    (print (eval "((lambda () `(define ,v ,e)))"))
+)))
+(print z)
+(z 'z 42)
+;; ... the env inside the lambda - the one that contains
+;;     v and e - doesn't exist when quasiquote runs; instead,
+;;     quasiquote sees the env containing the lambda defn.
+;;     the v,e env only exists once the lambda is actually
+;;     called...
+;; ... now what's up with the string eval failing? weird...
+;; ... 

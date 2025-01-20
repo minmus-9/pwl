@@ -333,7 +333,7 @@ def op_lambda(state, frame):
 
     if params is not EL:
         listcheck(state, params)
-    return bounce(frame.c, state, Lambda(state, params, body, frame.e))
+    return bounce(frame.c, state, Lambda(params, body, frame.e))
 
 
 @spcl("quote")
@@ -586,6 +586,18 @@ def op_sub(state, frame):
     return binary(state, frame, lambda x, y: x - y)
 
 
+@glbl(">float")
+def op_tofloat(state, frame):
+    (x,) = unpack(state, frame.x, 1)
+    return bounce(frame.c, state, float(x))
+
+
+@glbl(">int")
+def op_toint(state, frame):
+    (x,) = unpack(state, frame.x, 1)
+    return bounce(frame.c, state, int(x))
+
+
 @glbl(">string")
 def op_tostring(state, frame):
     (x,) = unpack(state, frame.x, 1)
@@ -632,21 +644,20 @@ class Lambda:
 
     special = False
 
-    def __init__(self, state, params, body, env):
-        self.state = state
+    def __init__(self, params, body, env):
         self.params, self.body, self.env = params, body, env
 
     def __call__(self, state, frame):
         args = frame.x
         parent = frame.e if self.special else self.env  ## specials are weird
-        e = Environment(self.state, self.params, args, parent)
-        return bounce(leval_, self.state, Struct(frame, x=self.body, e=e))
+        e = Environment(state, self.params, args, parent)
+        return bounce(leval_, state, Struct(frame, x=self.body, e=e))
 
-    def as_str_(self, _, frame):
-        self.state.fpush(frame, x=self.body)
+    def as_str_(self, state, frame):
+        state.fpush(frame, x=self.body)
         return bounce(
             stringify_,
-            self.state,
+            state,
             Struct(frame, x=self.params, c=lambda_params_done),
         )
 
@@ -1300,7 +1311,7 @@ class Lisp:
         env = self.globals if env is None else env
         try:
             return env.find(name)[name]
-        except KeyError:
+        except NameError:
             return None
 
     main = main
