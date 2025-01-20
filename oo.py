@@ -365,7 +365,8 @@ def qq_list(state, frame):
             and cdr(state, cdr(state, elt)) is EL
             and car(state, elt) is state.symbol("unquote-splicing")
         ):
-            elts = leval(state, car(state, cdr(state, elt)), frame.e)
+            if not isinstance(elts, list):
+                elts = leval(state, car(state, cdr(state, elt)), frame.e)
             listcheck(state, elts)
             while elts is not EL:
                 elt, elts = car(state, elts), cdr(state, elts)
