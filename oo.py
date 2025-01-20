@@ -356,7 +356,7 @@ def qq_list(state, frame):
         _, x = unpack(state, form, 2)
         raise LispError("cannot use unquote-splicing here")
 
-    state.fpush(x=SENTINEL)
+    state.fpush(frame, x=SENTINEL)
     while form is not EL:
         elt, form = car(state, form), cdr(state, form)
         if (
@@ -368,10 +368,10 @@ def qq_list(state, frame):
             listcheck(state, elts)
             while elts is not EL:
                 elt, elts = car(state, elts), cdr(state, elts)
-                state.fpush(x=elt)
+                state.fpush(frame, x=elt)
         else:
             elt = qq(state, Struct(frame, x=elt))
-            state.fpush(x=elt)
+            state.fpush(frame, x=elt)
     res = EL
     while True:
         f = state.fpop()
