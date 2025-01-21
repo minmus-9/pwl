@@ -605,14 +605,23 @@ def op_error(state, frame):
 
 @glbl("eval")
 def op_eval(state, frame):
-    (x,) = unpack(state, frame.x, 1)
+    try:
+        x, n_up = unpack(state, frame.x, 2)
+    except TypeError:
+        (x,) = unpack(state, frame.x, 1)
+        n_up = 0
     if isinstance(x, str) and not isinstance(x, Symbol):
         l = []
         p = Parser(state, l.append)
         p.feed(x)
         p.feed(None)
         x = l[-1] if l else EL
-    return bounce(leval_, state, Struct(frame, x=x))
+    e = frame.e
+    for _ in range(n_up):
+        e = e.parent
+        if e is None:
+            raise ValueError(f"cannot go up {n_up} levels")
+    return bounce(leval_, state, Struct(frame, x=x, e=e))
 
 
 def op_exit_cont(_, value):

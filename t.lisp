@@ -174,7 +174,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; def
 
-(special def (lambda (funcargs body) (def$ funcargs body)))
+(special def (lambda (funcargs body) (eval (def$ funcargs body) 1)))
 
 (define def$ (lambda (funcargs body) ( do
     (if (or (not (list? funcargs)) (null? funcargs))
@@ -186,7 +186,7 @@
 )))
 
 (define x -1) (define y -2)
-(eval (def (f x y) y))
+(def (f x y) y)
 (f 1 2) (f 2 3) (f 1 3)
 
 ;;;
@@ -220,5 +220,8 @@
 
 (let ((x 3) (y 4)) (add `,x y))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 
 
 (print "t.lisp done")
