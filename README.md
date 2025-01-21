@@ -114,10 +114,10 @@ GPL license header):
 |easy.py  |Pure-recursive implementation with a problem            | 500| 400|0.748|
 |rec.py   |Fixes easy.py's problem, but still has limited recursion| 650| 500|1.483|
 |cont.py  |Features "heap-based" recursion and continuations       |1000| 700|4.664|
-|lisp.py  |Add FFI and API                                         |1350|1000|4.710|
+|lisp.py  |Add FFI, API, quasiquote and friends                    |1500|1100|4.710|
 |pylisp.py|Add an FFI-based runtime to lisp.py using its API       | 250| 200|4.676|
 |pwl.py   |Inline all the stdlibs, call pylisp.py and lisp.py      |~800|~700|4.722|
-|oo.py    |OO version of lisp.py                                   |1400|1050|4.449|
+|oo.py    |OO version of lisp.py                                   |1550|1150|4.449|
 
 The silly benchmark lives in the file `bench.lisp`.
 
