@@ -352,6 +352,7 @@ def op_lambda(frame):
 ## (special) doesn't quite get the job done due to the way its env works.
 ## it ain't the same as a recursive scheme macro :-)
 
+
 def qq_list_setup(frame, form):
     elt, form = car(form), cdr(form)
     fpush(frame, x=form)
@@ -403,10 +404,7 @@ def qq_spliced(value):
 def qq_list_next(frame):
     elt = frame.x
 
-    if (
-        isinstance(elt, list)
-        and car(elt) is symbol("unquote-splicing")
-    ):
+    if isinstance(elt, list) and car(elt) is symbol("unquote-splicing"):
         _, x = unpack(elt, 2)
         return bounce(leval_, Struct(frame, x=x, c=qq_spliced))
     return bounce(qq, Struct(frame, x=elt, c=qq_list_cont))
