@@ -252,19 +252,17 @@
             ((null? (cdr l)) (car l))
             (#t (list (set! l (cdr l)) (c c)))
         )
-    ) (call/cc (lambda (cc) cc)) )  ;; this is a WEIRD continuation
-))                                  ;; i'm amazed that it worked
+    ) (call/cc (lambda (cc) cc)) )
+))
 
 (range 10)
 (last l)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; that was freaky. what if i do something like
-;;   ((lambda (c x) ...) (call/cc ...) (generate_x) ...)
-;; then i should call the generators on every loop.
+;; how about this:
 
-(define trippy! (lambda (n) ( do
+(define countdown (lambda (n) ( do
     ((lambda (c k) ( do
         (print 'N n)
         (cond
@@ -273,11 +271,16 @@
         )
     ))
         (call/cc (lambda (cc) cc))
-        (sub n 3)  ;; yup, count down from n by threes
+        (sub n 3)
     )
 )))
 
-(trippy! 10)
+(countdown 10)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
