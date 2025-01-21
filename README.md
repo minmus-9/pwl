@@ -358,7 +358,8 @@ complete (with string methods in particular), try `pylisp.py` or `pwl.py`.
 |sicp.lisp   | Some code from SICP (see sicp.pdf reference below) that only uses stdlib.lisp |
 |runtime.lisp| Stuff for everything but easy.py |
 |cont.lisp   | Stuff that uses continuations (lisp.py and up) |
-|pylisp.lisp | Additional runtime support for pylisp.py and up |
+|lisp.lisp   | Stuff that uses quasiquote |
+|pylisp.lisp | Additional FFI runtime support for pylisp.py and up |
 
 ### `stdlib.lisp`
 
@@ -393,6 +394,11 @@ instead of the easier-to-read tick syntax.
 This file requires `cont.py` or higher because it includes things that are
 implemented using continuations. Abominations like looping. Which are
 important when you don't have tail call optimizations.
+
+### `lisp.lisp`
+
+The code in here uses quasiquote (only implemented in lisp.py and up) or
+provides other useful runtime services.
 
 ### `pylisp.lisp`
 
