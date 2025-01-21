@@ -232,16 +232,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; assoc
 
-(define table (lambda () ( do
+(define table (lambda (compare) ( do
     (define items ())
     (define dispatch (lambda (m & args) ( do
         (cond
-            ((eq? m 'length) (length items))
-            ((eq? m 'del) (set! items (table$delete items (car args))))
+            ((eq? m 'len) (length items))
+            ((eq? m 'del) (set! items (table$delete items (car args) compare)))
             ((eq? m 'get) ( do
                 (let* (
                     (key (car args))
-                    (node (table$find items key)))
+                    (node (table$find items key compare)))
                     (cond
                         ((null? node) ())
                         (#t (cadr node))
@@ -253,7 +253,7 @@
                 (let* (
                     (key (car args))
                     (value (cadr args))
-                    (node (table$find items key)))
+                    (node (table$find items key compare)))
                     (cond
                         ((null? node) ( do
                             (let* (
@@ -270,20 +270,20 @@
     dispatch
 )))
 
-(define table$find (lambda (items key)
+(define table$find (lambda (items key compare)
     (cond
       ((null? items) ())
-      ((eq? (car (car items)) key) (car items))
-      (#t (table$find (cdr items) key))
+      ((compare (car (car items)) key) (car items))
+      (#t (table$find (cdr items) key compare))
     )
 ))
 
-(define table$delete (lambda (items key) ( do
+(define table$delete (lambda (items key compare) ( do
     (define prev ())
     (define helper (lambda (assoc key) ( do
         (cond
             ((null? assoc) items)
-            ((eq? (car (car assoc)) key) (do
+            ((compare (car (car assoc)) key) (do
                 (cond
                     ((null? prev) (cdr assoc))
                     (#t (do (set-cdr! prev (cdr assoc)) items))
@@ -298,20 +298,20 @@
     (helper items key)
 )))
 
-(define t (table))
-(t 'length)
+(define t (table eq?))
+(t 'len)
 (print (t 'get 'hello))
-(print "ok")
 (t 'set 'hello 42)
 (t 'set 'goodbye 19)
 (t 'set 'hola 37)
 (print (t 'get 'hello))
 (t 'set 'hello 64)
 (print (t 'get 'hello))
+(print (t 'len))
 (print (t 'raw))
-(t 'del 'hello)
 (t 'del 'goodbye)
 (t 'del 'hola)
+(t 'del 'hello)
 (print (t 'raw))
 
 
