@@ -376,9 +376,9 @@ file.
 
 ### `runtime.lisp`
 
-Aside from `(list-builder)` and a couple of pythonic things, this file is
-about `(quasiquote)` which comes from Heller. This doesn't work with `easy.py`,
-due to the use of `(set-cdr!)` but it does work with `rec.py` and above.
+Just `(list-builder)` and a couple of pythonic things. This doesn't work
+with `easy.py`, due to the use of `(set-cdr!)` but it does work with
+`rec.py` and above.
 
 I didn't add the backquote etc. quasiquoting sugar to `rec.py` which is
 why the stdlibs use `(quote)` all over the place. So you'll see a bunch of

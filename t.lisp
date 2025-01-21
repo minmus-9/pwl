@@ -189,7 +189,8 @@
 (def (f x y) y)
 (f 1 2) (f 2 3) (f 1 3)
 
-;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; let*
 
 (special let* (lambda (vdefs body) (eval (let*$ vdefs body))))
 
@@ -207,7 +208,8 @@
 
 (let* ((x 1) (y 2)) (add `,x y))
 
-;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; let
 
 (special let (lambda (vdefs body) (eval (let$ vdefs body))))
 
@@ -222,6 +224,40 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; 
+;; range
 
+(define range (lambda (n) ( do
+    (define l ())
+    (define c (call/cc (lambda (cc) cc)))
+    (cond
+        ((equal? n 0) l)
+        (#t (do
+            (set! n (sub n 1))
+            (set! l (cons n l))
+            (c c)
+        ))
+    )
+)))
+
+(range 10)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; faster (last) esp for (do)
+
+
+(define last (lambda (l)            ;; can't use (do)!
+    ((lambda (c)
+        (cond
+            ((null? (cdr l)) (car l))
+            (#t (list (set! l (cdr l)) (c c)))
+        )
+    ) (call/cc (lambda (cc) cc)) )  ;; this is a WEIRD continuation
+))                                  ;; i'm amazed that it worked
+
+(last l)
+
+(range 10)
+(last (list 1 4 9))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (print "t.lisp done")
