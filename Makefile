@@ -18,7 +18,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-LIB_SRCS=stdlib.lisp runtime.lisp cont.lisp pylisp.lisp
+LIB_SRCS=stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp
 
 all:	pwl.py
 
