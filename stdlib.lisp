@@ -207,6 +207,8 @@
 (define second cadr)
 (define caddr (lambda (l) (car (cdr (cdr l)))))
 (define third caddr)
+(define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
+(define fourth cadddr)
 
 
 ;; sicp p.158-165

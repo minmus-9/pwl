@@ -190,9 +190,36 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
+;; "kadd" service executes "kernel" coroutine to handle the blocking rqst
 
+(define kadd (lambda (x y)
+    (call/cc (lambda (cc) ((kentry) (list 'kadd cc x y))))
+))
 
+(define kentry (lambda () ( do
+    (define z (call/cc (lambda (cc) cc)))
+    (cond
+        ((list? z) (kparse z))
+        (#t z)
+    )
+)))
+
+(define kparse (lambda (args) ( do
+    (let (
+        (m (first args))
+        (c (second args)))
+      (cond
+        ((eq? m 'kadd) ( let (
+            (x (third args))
+            (y (fourth args)))
+          (c (add x y)))
+        )
+        (#t (error "unknown method"))
+      )
+    )
+)))
+
+(kadd 11 31)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (print "t.lisp done")
