@@ -190,21 +190,28 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; "kadd" service executes "kernel" coroutine to handle the blocking rqst
+;; "kadd" service executes "kernel" coroutine to handle the blocking
+;; kadd request (blocks from the perspective of the (kadd) caller);
+;; the "kernel" can fulfill the requests whenever it suits and then
+;; wake up the (kadd) caller once the result is ready.
 
 (define kadd (lambda (x y)
-    (call/cc (lambda (cc) ((kentry) (list 'kadd cc x y))))
+    (kcall 'kadd x y)
+))
+
+(define kcall (lambda (m & args)
+    (call/cc (lambda (cc) ((kentry) (join (list m cc) args))))
 ))
 
 (define kentry (lambda () ( do
     (define z (call/cc (lambda (cc) cc)))
     (cond
-        ((list? z) (kparse z))
+        ((list? z) (kexec z))
         (#t z)
     )
 )))
 
-(define kparse (lambda (args) ( do
+(define kexec (lambda (args) ( do
     (let (
         (m (first args))
         (c (second args)))
@@ -220,6 +227,13 @@
 )))
 
 (kadd 11 31)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (print "t.lisp done")
