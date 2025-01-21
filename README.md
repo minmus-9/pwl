@@ -31,11 +31,12 @@ transformations) which makes it even more fun to mess with.
 Running the code is pretty much the same regardless of which implementation
 you want to run:
 ```
-./easy.py stdlib.lisp -
-./rec.py stdlib.lisp runtime.lisp -
-./cont.py + stdlib.lisp runtime.lisp cont.lisp -
-./lisp.py + stdlib.lisp runtime.lisp cont.lisp -
-./pylisp.py + stdlib.lisp runtime.lisp cont.lisp pylisp.lisp -
+./easy.py     stdlib.lisp -
+./rec.py      stdlib.lisp runtime.lisp -
+./cont.py   + stdlib.lisp runtime.lisp cont.lisp -
+./lisp.py   + stdlib.lisp runtime.lisp cont.lisp lisp.lisp -
+./pylisp.py + stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp -
+./oo.py     + stdlib.lisp runtime.lisp cont.lisp lisp.lisp -
 ```
 will run `easy.py`, execute `stdlib.lisp`, and the '-' will pop you into the
 repl. If you omit the '-', the other files will be executed and the program
@@ -49,7 +50,7 @@ decimal digits).
 
 If you want to exercise everything, try
 ```
-./pylisp.py + stdlib.lisp runtime.lisp cont.lisp pylisp.lisp sicp.lisp -
+./pylisp.py + stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp sicp.lisp -
 ```
 or
 ```

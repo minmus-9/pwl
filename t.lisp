@@ -230,6 +230,92 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; assoc
+
+(define table (lambda () ( do
+    (define items ())
+    (define dispatch (lambda (m & args) ( do
+        (cond
+            ((eq? m 'length) (length items))
+            ((eq? m 'del) (set! items (table$delete items (car args))))
+            ((eq? m 'get) ( do
+                (let* (
+                    (key (car args))
+                    (node (table$find items key)))
+                    (cond
+                        ((null? node) ())
+                        (#t (cadr node))
+                    )
+                )
+            ))
+            ((eq? m 'raw) items)
+            ((eq? m 'set) ( do
+                (let* (
+                    (key (car args))
+                    (value (cadr args))
+                    (node (table$find items key)))
+                    (cond
+                        ((null? node) ( do
+                            (let* (
+                                (node (cons key (cons value ()))))
+                                (set! items (cons node items)))
+                        ))
+                        (#t (set-car! (cdr node) value))
+                    )
+                )
+            ))
+            (#t (error "unknown method"))
+        )
+    )))
+    dispatch
+)))
+
+(define table$find (lambda (items key)
+    (cond
+      ((null? items) ())
+      ((eq? (car (car items)) key) (car items))
+      (#t (table$find (cdr items) key))
+    )
+))
+
+(define table$delete (lambda (items key) ( do
+    (define prev ())
+    (define helper (lambda (assoc key) ( do
+        (cond
+            ((null? assoc) items)
+            ((eq? (car (car assoc)) key) (do
+                (cond
+                    ((null? prev) (cdr assoc))
+                    (#t (do (set-cdr! prev (cdr assoc)) items))
+                )
+            ))
+            (#t ( do
+                (set! prev assoc)
+                (helper (cdr assoc) key)
+            ))
+        )
+    )))
+    (helper items key)
+)))
+
+(define t (table))
+(t 'length)
+(print (t 'get 'hello))
+(print "ok")
+(t 'set 'hello 42)
+(t 'set 'goodbye 19)
+(t 'set 'hola 37)
+(print (t 'get 'hello))
+(t 'set 'hello 64)
+(print (t 'get 'hello))
+(print (t 'raw))
+(t 'del 'hello)
+(t 'del 'goodbye)
+(t 'del 'hola)
+(print (t 'raw))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
 

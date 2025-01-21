@@ -195,7 +195,9 @@ def set_car(state, lst, x):
 
 
 def set_cdr(state, lst, lst2):
-    listcheck(state, lst)[1] = listcheck(state, lst2)
+    if lst2 is not EL:
+        listcheck(state, lst2)
+    listcheck(state, lst)[1] = lst2
     return EL
 
 
