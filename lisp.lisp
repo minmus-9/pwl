@@ -76,4 +76,88 @@
 )))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; associative table
+
+(define table (lambda (compare) ( do
+    (define items ())
+    (define dispatch (lambda (m & args) ( do
+        (cond
+            ((eq? m 'len) (length items))
+            ((eq? m 'del) (set! items (table$delete items (car args) compare)))
+            ((eq? m 'get) ( do
+                (let* (
+                    (key (car args))
+                    (node (table$find items key compare)))
+                    (cond
+                        ((null? node) ())
+                        (#t (cadr node))
+                    )
+                )
+            ))
+            ((eq? m 'iter) ( do
+                (let ((lst items))
+                    (lambda ()
+                        (cond
+                            ((null? lst) ())
+                            (#t ( do
+                                (define ret (car lst))
+                                (set! lst (cdr lst))
+                                ret
+                            ))
+                        )
+                    )
+                )
+            ))
+            ((eq? m 'raw) items)
+            ((eq? m 'set) ( do
+                (let* (
+                    (key (car args))
+                    (value (cadr args))
+                    (node (table$find items key compare)))
+                    (cond
+                        ((null? node) ( do
+                            (let* (
+                                (node (cons key (cons value ()))))
+                                (set! items (cons node items)))
+                        ))
+                        (#t (set-car! (cdr node) value))
+                    )
+                )
+            ))
+            (#t (error "unknown method"))
+        )
+    )))
+    dispatch
+)))
+
+(define table$find (lambda (items key compare)
+    (cond
+      ((null? items) ())
+      ((compare (car (car items)) key) (car items))
+      (#t (table$find (cdr items) key compare))
+    )
+))
+
+(define table$delete (lambda (items key compare) ( do
+    (define prev ())
+    (define helper (lambda (assoc key) ( do
+        (cond
+            ((null? assoc) items)
+            ((compare (car (car assoc)) key) (do
+                (cond
+                    ((null? prev) (cdr assoc))
+                    (#t (do (set-cdr! prev (cdr assoc)) items))
+                )
+            ))
+            (#t ( do
+                (set! prev assoc)
+                (helper (cdr assoc) key)
+            ))
+        )
+    )))
+    (helper items key)
+)))
+
+
 ;; EOF

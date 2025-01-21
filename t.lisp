@@ -83,7 +83,7 @@
     )
 )))
 ;(print (! 10000))
-(print (! 1000))  ;; got sick of waiting every time i run this
+(print (! 100))  ;; got sick of waiting every time i run this
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -196,7 +196,7 @@
 ;; wake up the (kadd) caller once the result is ready.
 
 (define kadd (lambda (x y)
-    (kcall 'kadd x y)
+    (kcall 'add x y)
 ))
 
 (define kcall (lambda (m & args)
@@ -211,108 +211,28 @@
     )
 )))
 
-(define kexec (lambda (args) ( do
-    (let (
+(define kexec (lambda (args)
+    (let* (
         (m (first args))
-        (c (second args)))
+        (c (second args))
+        (f (kftab 'get m))
+        (args (cdr (cdr args))))
       (cond
-        ((eq? m 'kadd) ( let (
-            (x (third args))
-            (y (fourth args)))
-          (c (add x y)))
-        )
-        (#t (error "unknown method"))
+        ((null? f) (error "unknown function call"))
+        (#t (f c args))
       )
-    )
-)))
-
-(kadd 11 31)
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; assoc
-
-(define table (lambda (compare) ( do
-    (define items ())
-    (define dispatch (lambda (m & args) ( do
-        (cond
-            ((eq? m 'len) (length items))
-            ((eq? m 'del) (set! items (table$delete items (car args) compare)))
-            ((eq? m 'get) ( do
-                (let* (
-                    (key (car args))
-                    (node (table$find items key compare)))
-                    (cond
-                        ((null? node) ())
-                        (#t (cadr node))
-                    )
-                )
-            ))
-            ((eq? m 'raw) items)
-            ((eq? m 'set) ( do
-                (let* (
-                    (key (car args))
-                    (value (cadr args))
-                    (node (table$find items key compare)))
-                    (cond
-                        ((null? node) ( do
-                            (let* (
-                                (node (cons key (cons value ()))))
-                                (set! items (cons node items)))
-                        ))
-                        (#t (set-car! (cdr node) value))
-                    )
-                )
-            ))
-            (#t (error "unknown method"))
-        )
-    )))
-    dispatch
-)))
-
-(define table$find (lambda (items key compare)
-    (cond
-      ((null? items) ())
-      ((compare (car (car items)) key) (car items))
-      (#t (table$find (cdr items) key compare))
     )
 ))
 
-(define table$delete (lambda (items key compare) ( do
-    (define prev ())
-    (define helper (lambda (assoc key) ( do
-        (cond
-            ((null? assoc) items)
-            ((compare (car (car assoc)) key) (do
-                (cond
-                    ((null? prev) (cdr assoc))
-                    (#t (do (set-cdr! prev (cdr assoc)) items))
-                )
-            ))
-            (#t ( do
-                (set! prev assoc)
-                (helper (cdr assoc) key)
-            ))
-        )
-    )))
-    (helper items key)
-)))
+(define kftab (table eq?))
 
-(define t (table eq?))
-(t 'len)
-(print (t 'get 'hello))
-(t 'set 'hello 42)
-(t 'set 'goodbye 19)
-(t 'set 'hola 37)
-(print (t 'get 'hello))
-(t 'set 'hello 64)
-(print (t 'get 'hello))
-(print (t 'len))
-(print (t 'raw))
-(t 'del 'goodbye)
-(t 'del 'hola)
-(t 'del 'hello)
-(print (t 'raw))
+(kftab 'set 'add
+    (lambda (c args) (c (eval (cons add args)))))
+
+(kadd 11 31)
+
+;(for (lambda (i) (kadd 11 31)) 1000)  ;; 18ms per
+;(for (lambda (i) ()) 1000) ;; 2ms per
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

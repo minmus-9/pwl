@@ -61,6 +61,20 @@
     )
 )))
 
+;; call f a given number of times as (f counter)
+(define for (lambda (f n) ( do
+    (define i 0)
+    (define c (call/cc (lambda (cc) cc)))
+    (cond
+        ((equal? i n) ())
+        (#t ( do
+            (f i)
+            (set! i (add i 1))
+            (c c)
+        ))
+    )
+)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; misc
 
