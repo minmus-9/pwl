@@ -154,10 +154,9 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
+;; fiddling getting quasiquote to work
 
 (define v 'a) (define e 97) (define l '(1 2))
-(print 'L l)
 (define w ())
 (define z (lambda (v e) ( do
   (print 'QQ `(set! ,v (add 1 ,e ,@l ,@(list 3 4))))
@@ -170,3 +169,56 @@
 (print 'W w)
 (z 'w 121)
 (print 'W w)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; def
+
+(special def (lambda (funcargs body) (def$ funcargs body)))
+
+(define def$ (lambda (funcargs body) ( do
+    (if (or (not (list? funcargs)) (null? funcargs))
+        (error "def needs a func to define!")
+        ())
+    (define f (car funcargs))
+    (define a (cdr funcargs))
+    `(define ,f (lambda (,@a) ,body))
+)))
+
+(define x -1) (define y -2)
+(eval (def (f x y) y))
+(f 1 2) (f 2 3) (f 1 3)
+
+;;;
+
+(special let* (lambda (vdefs body) (eval (let*$ vdefs body))))
+
+(define let*$ (lambda (vdefs body) ( do
+    (cond
+        ((null? vdefs) body)
+        (#t ( do
+            (define kv (car vdefs))
+            (set! vdefs (cdr vdefs))
+            (define k (car kv))
+            (define v (cadr kv))
+          `((lambda (,k) ,(let*$ vdefs body)) ,v)))
+    )
+)))
+
+(let* ((x 1) (y 2)) (add `,x y))
+
+;;;
+
+(special let (lambda (vdefs body) (eval (let$ vdefs body))))
+
+(define let$ (lambda (vdefs body) ( do
+    (define vdecls (transpose vdefs))
+    (define vars (car vdecls))
+    (define vals (cadr vdecls))
+    `((lambda (,@vars) ,body) ,@vals)
+)))
+
+(let ((x 3) (y 4)) (add `,x y))
+
+
+(print "t.lisp done")
