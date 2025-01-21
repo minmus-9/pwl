@@ -240,10 +240,11 @@
 )))
 
 (range 10)
+(define l (range 100))
+(last l)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; faster (last) esp for (do)
-
 
 (define last (lambda (l)            ;; can't use (do)!
     ((lambda (c)
@@ -254,10 +255,30 @@
     ) (call/cc (lambda (cc) cc)) )  ;; this is a WEIRD continuation
 ))                                  ;; i'm amazed that it worked
 
+(range 10)
 (last l)
 
-(range 10)
-(last (list 1 4 9))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; that was freaky. what if i do something like
+;;   ((lambda (c x) ...) (call/cc ...) (generate_x) ...)
+;; then i should call the generators on every loop.
+
+(define trippy! (lambda (n) ( do
+    ((lambda (c k) ( do
+        (print 'N n)
+        (cond
+            ((lt? n 1) "OK")
+            (#t (do (set! n k) (c c)))
+        )
+    ))
+        (call/cc (lambda (cc) cc))
+        (sub n 3)  ;; yup, count down from n by threes
+    )
+)))
+
+(trippy! 10)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (print "t.lisp done")
