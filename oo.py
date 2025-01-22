@@ -1418,6 +1418,10 @@ class Lisp:
         sexpr = self.py_value_to_lisp_value([obj] + list(args))
         return self.lisp_value_to_py_value(self.eval(sexpr))
 
+    def define(self, name, value, env=None):
+        env = self.globals if env is None else env
+        env[self.symbol(str(name))] = value
+
     def eval(self, sexpr, env=None):
         return leval(self, sexpr, self.globals if env is None else env)
 

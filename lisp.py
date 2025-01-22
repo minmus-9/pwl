@@ -280,10 +280,6 @@ def fsave():
     return STACK
 
 
-def ftop():
-    return car(STACK)
-
-
 ## }}}
 ## {{{ special forms
 
@@ -1421,7 +1417,6 @@ class lisp:
     freset = freset
     frestore = frestore
     fsave = fsave
-    ftop = ftop
 
     spcl = spcl
     glbl = glbl

@@ -48,11 +48,18 @@ def go():
     print(lisp.call("add", 3, 5))
     print(lisp.execute("(add 3 5)")[0])
 
-    def f(frame):
+    def f(*args):
+        assert len(args) in (1, 2)
+        if len(args) == 1:
+            (frame,) = args  ## lisp.py
+            out = (frame.c,)
+        else:
+            state, frame = args  ## oo.py
+            out = (frame.c, state)
         print("f", frame.__dict__)
         ## recursive call to continuation we made above
         ret = lisp.call(cont, lisp.lisp_value_to_py_value(frame.x)[-1])
-        return lisp.bounce(frame.c, ret)
+        return lisp.bounce(*out, ret)
 
     ## jam f into the namespace. now it's an anonymous op.
     lisp.define("f", f)

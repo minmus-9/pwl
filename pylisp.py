@@ -18,7 +18,7 @@
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-pylisp.py - lisp.py with a python runtime added
+pylisp.py - oo.py with a python runtime added
 
 this stuff doesn't do any type checking so not bullet-proof
 """
@@ -31,10 +31,10 @@ import random
 import time
 
 
-__all__ = ("lisp",)
+__all__ = ("lisp", "Lisp")
 
 
-from lisp import lisp
+from oo import lisp, Lisp
 
 
 UNSPECIFIED = object()
