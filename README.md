@@ -35,8 +35,8 @@ you want to run:
 ./rec.py      stdlib.lisp runtime.lisp -
 ./cont.py   + stdlib.lisp runtime.lisp cont.lisp -
 ./lisp.py   + stdlib.lisp runtime.lisp cont.lisp lisp.lisp -
-./pylisp.py + stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp -
 ./oo.py     + stdlib.lisp runtime.lisp cont.lisp lisp.lisp -
+./pylisp.py + stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp -
 ```
 will run `easy.py`, execute `stdlib.lisp`, and the '-' will pop you into the
 repl. If you omit the '-', the other files will be executed and the program
@@ -116,9 +116,9 @@ GPL license header):
 |rec.py   |Fixes easy.py's problem, but still has limited recursion| 650| 500|1.483|
 |cont.py  |Features "heap-based" recursion and continuations       |1000| 700|4.664|
 |lisp.py  |Add FFI, API, quasiquote and friends                    |1500|1100|4.710|
-|pylisp.py|Add an FFI-based runtime to lisp.py using its API       | 250| 200|4.676|
-|pwl.py   |Inline all the stdlibs, call pylisp.py and lisp.py      |~800|~700|4.722|
 |oo.py    |OO version of lisp.py                                   |1550|1150|4.449|
+|pylisp.py|Add an FFI-based runtime to oo.py using its API         | 250| 200|4.676|
+|pwl.py   |Inline all the stdlibs, call pylisp.py                  |1100| 800|4.722|
 
 The silly benchmark lives in the file `bench.lisp`.
 
@@ -312,19 +312,27 @@ This api class cannot be instantiated; it's just a namespace to hold a bunch
 of useful symbols. See `oo.py` below.
 
 ---
+### oo.py
+
+This module exports a `Lisp` class and a global instance of it, `lisp`. Things
+should hopefully continue to work as-is. If you want to play with a "vanilla"
+lisp, this module is probably the one to try; if you want something more
+complete (with string methods in particular), try `pylisp.py` or `pwl.py`.
+
+---
 ### pylisp.py
 
-This file extends lisp.py by adding a bunch of ffi-based runtime in pylisp.py
+This file extends oo.py by adding a bunch of ffi-based runtime in pylisp.py
 and pylisp.lisp. some list methods, math module, random module, some string
 methods, and the time module so far.
 
 `pylisp.py` doesn't have all the lisp innards in it; instead, it just imports
-`lisp.py` to do all the work. I figured that `lisp.py` is about as far as I
+`oo.py` to do all the work. I figured that `oo.py` is about as far as I
 wanted to go (hopefully) without becoming too application-specific. Adding a
 bunch of stuff to the FFI namespace and polluting the global namespace with
 wrappers is what happens in `pylisp.{py,lisp}`.
 
-A note on `rec.py`: everything added in `lisp.py` and `pylisp.py` could be
+A note on `rec.py`: everything added in `oo.py` and `pylisp.py` could be
 trivially back-ported to `rec.py` if you wanted a pure-recursive implementation
 with extra python integration. I considered `rec.py` done so I didn't backport
 anything. Plus I wanted to see the cost of changing the lisp list
@@ -340,14 +348,6 @@ This file inlines the lisp libraries `stdlib.lisp`, `runtime.lisp`,
 `cont.lisp`, and `pylisp.lisp`. Note that it requires the files `pylisp.py`
 and `lisp.py` in order to run. Just saves some typing. Don't forget to run
 `make` if you change any of the lisp libs (see below).
-
----
-### oo.py
-
-This module exports a `Lisp` class and a global instance of it, `lisp`. Things
-should hopefully continue to work as-is. If you want to play with a "vanilla"
-lisp, this module is probably the one to try; if you want something more
-complete (with string methods in particular), try `pylisp.py` or `pwl.py`.
 
 ---
 ## Included lisp files
