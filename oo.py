@@ -1438,7 +1438,7 @@ class Lisp:
         except NameError:
             return None
 
-    main = main
+    main = staticmethod(main)
 
     def parse(self, text, callback):
         p = Parser(self, callback)
@@ -1454,16 +1454,16 @@ class Lisp:
     ########################################################################
     ## development type stuff
 
-    spcl = spcl
-    glbl = glbl
-    ffi = ffi
+    spcl = staticmethod(spcl)
+    glbl = staticmethod(glbl)
+    ffi = staticmethod(ffi)
 
-    unary = unary
-    binary = binary
+    unary = staticmethod(unary)
+    binary = staticmethod(binary)
 
-    trampoline = trampoline
-    bounce = bounce
-    land = land
+    trampoline = staticmethod(trampoline)
+    bounce = staticmethod(bounce)
+    land = staticmethod(land)
 
     SENTINEL = SENTINEL
 

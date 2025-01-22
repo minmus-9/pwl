@@ -195,11 +195,11 @@
 ;; the "kernel" can fulfill the requests whenever it suits and then
 ;; wake up the (kadd) caller once the result is ready.
 
-(define kadd (lambda (x y)
-    (kcall 'add x y)
+(define kadd (lambda (& args)
+    (kcall 'add args)
 ))
 
-(define kcall (lambda (m & args)
+(define kcall (lambda (m args)
     (call/cc (lambda (cc) ((kentry) (join (list m cc) args))))
 ))
 
@@ -237,6 +237,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+
 
 
 
