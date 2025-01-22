@@ -905,9 +905,13 @@ def leval_(frame):
         return bounce(frame.c, env.find(x)[x])
     if (x is T) or (x is EL) or isinstance(x, (int, float, str)):
         return bounce(frame.c, x)
-    if callable(x) and not isinstance(x, (Lambda, Continuation)):
-        return bounce(frame.c, x)
-    sym, args = car(listcheck(x)), cdr(x)
+    if callable(x):
+        if isinstance(x, Lambda):
+            sym, args = x, EL
+        else:
+            return bounce(frame.c, state, x)
+    else:
+        sym, args = car(state, listcheck(state, x)), cdr(state, x)
     if isinstance(sym, Symbol):
         try:
             op = SPECIALS.find(sym)[sym]
@@ -1386,6 +1390,10 @@ class lisp:
     @staticmethod
     def define(name, value, env=GLOBALS):
         env[symbol(str(name))] = value
+
+    @staticmethod
+    def update(self):
+        pass  ## actually does something in oo.py
 
     repl = repl
 

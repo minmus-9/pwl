@@ -22,7 +22,7 @@ LIB_SRCS=stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp
 
 all:	pwl.py
 
-pwl.py:	pwl.py.in pylisp.py lisp.py lib.lisp
+pwl.py:	pwl.py.in pylisp.py oo.py lib.lisp
 	cat pwl.py.in | sed -e '/@preload_src@/r lib.lisp' > $@
 	chmod 755 $@
 	

@@ -24,7 +24,7 @@
 ## pylint: disable=invalid-name
 ## XXX pylint: disable=missing-docstring
 
-from pwl import lisp, load
+from pwl import lisp
 
 
 def go():
@@ -91,7 +91,6 @@ def go():
 
 
 if __name__ == "__main__":
-    load()
     go()
 
 

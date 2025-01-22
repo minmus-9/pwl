@@ -32,12 +32,31 @@ preload_src = r"""
 """
 
 
+@lisp.glbl("time")
+def op_time(state, frame):
+    import time  ## pylint: disable=import-outside-toplevel
+    proc, n = state.unpack(frame.x, 2)
+    t0 = time.time()
+    for _ in range(n):
+        state.eval(proc, frame.e)
+    t1 = time.time()
+    dt = max(t1 - t0, 1e-7)
+    ret = state.cons(n / dt, lisp.EL)
+    ret = state.cons(1e6 * dt / n, ret)
+    ret = state.cons(dt, ret)
+    ret = state.cons(n, ret)
+    return state.bounce(frame.c, state, ret)
+
+
 def load():
     lisp.execute(preload_src)
 
 
+load()  ## load libs
+lisp.update()  ## update from glbl() and spcl() decls
+
+
 if __name__ == "__main__":
-    load()
     lisp.main()
 
 

@@ -914,9 +914,13 @@ def leval_(state, frame):
         return bounce(frame.c, state, env.find(x)[x])
     if (x is T) or (x is EL) or isinstance(x, (int, float, str)):
         return bounce(frame.c, state, x)
-    if callable(x) and not isinstance(x, (Lambda, Continuation)):
-        return bounce(frame.c, state, x)
-    sym, args = car(state, listcheck(state, x)), cdr(state, x)
+    if callable(x):
+        if isinstance(x, Lambda):
+            sym, args = x, EL
+        else:
+            return bounce(frame.c, state, x)
+    else:
+        sym, args = car(state, listcheck(state, x)), cdr(state, x)
     if isinstance(sym, Symbol):
         try:
             op = state.specials.find(sym)[sym]
@@ -1454,6 +1458,10 @@ class Lisp:
 
     def type(self, x):
         return ltype(self, x)
+
+    def update(self):
+        self.specials_.update(SPECIALS)
+        self.globals_.update(GLOBALS)
 
     ########################################################################
     ## development type stuff
