@@ -290,8 +290,9 @@
     (define dispatch (lambda (m & args)
         (cond
             ((eq? m 'call) (kcall (car args) (cdr args)))
-            ((eq? m 'dequeue) ((getq (car args)) 'dequeue))
-            ((eq? m 'enqueue) ((getq (car args)) 'enqueue (cadr args)))
+            ((eq? m 'dequeue) ((queues 'get (car args)) 'dequeue))
+            ((eq? m 'enqueue) ((queues 'get (car args)) 'enqueue (cadr args)))
+            ((eq? m 'create-queue) (getq (car args)))
             ((eq? m 'register) (let (
                 (service (car args))
                 (implementation (cadr args)))
