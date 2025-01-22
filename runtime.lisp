@@ -21,7 +21,7 @@
 ;; it will work for rec.py and up
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; dingus to build a list by appending in linear time
+;; dingus to build a list by appending in linear time. it's an ad-hoc queue
 
 (define list-builder (lambda () ( do
     (define ht (list () ()))
@@ -134,3 +134,65 @@
     ))
     next
 )))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; queue
+
+(define queue (lambda () ( do
+    (define h ())
+    (define t ())
+
+    (define dispatch (lambda (op & args)
+        (cond
+            ((eq? op (quote enqueue))
+                (cond
+                    ((equal? (length args ) 1) ( do
+                        (define node (cons (car args) ()))
+                        (cond
+                            ((null? h) (set! h node))
+                            (#t (set-cdr! t node))  ; this is why easy.py fails
+                        )
+                        (set! t node)
+                        ()
+                    ))
+                    (#t (error "enqueue takes one arg"))
+                )
+            )
+            ((eq? op (quote dequeue))
+                (cond
+                    ((equal? (length args) 0)
+                        (cond
+                            ((null? h) (error "queue is empty"))
+                            (#t ( let (
+                                (ret (car h)))
+                                (do
+                                    (set! h (cdr h))
+                                    (if (null? h) (set! t ()) ())
+                                    ret
+                                ))
+                            )
+                        )
+                    )
+                    (#t (error "dequeue takes no args"))
+                )
+            )
+            ((eq? op (quote empty?)) (eq? h ()))
+            ((eq? op (quote enqueue-many))
+                (cond
+                    ((and (equal? (length args) 1) (list? (car args))) ( do
+                        (foreach enqueue (car args))
+                        dispatch
+                    ))
+                    (#t (error "enqueue-many takes one list arg"))
+                )
+            )
+            ((eq? op (quote get-all)) h)
+        )
+    ))
+    dispatch
+)))
+
+
+
+;; EOF

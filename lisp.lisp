@@ -99,7 +99,7 @@
     (define items ())
     (define dispatch (lambda (m & args) ( do
         (cond
-            ((eq? m 'len) (length items))
+            ((eq? m 'known) (not (null? (table$find items key compare))))
             ((eq? m 'del) (set! items (table$delete items (car args) compare)))
             ((eq? m 'get) ( do
                 (let* (
@@ -125,6 +125,7 @@
                     )
                 )
             ))
+            ((eq? m 'len) (length items))
             ((eq? m 'raw) items)
             ((eq? m 'set) ( do
                 (let* (

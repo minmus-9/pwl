@@ -260,6 +260,62 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
+(define kernel (lambda () ( do
+    (define registry (table eq?))
+    (define queues (table eq?))
+    (define kcall (lambda (m args)
+        (call/cc (lambda (cc) ((kentry) (join (list m cc) args))))
+    ))
+    (define kentry (lambda () ( do
+        (define kc (call/cc (lambda (cc) cc)))
+        (cond
+            ((list? kc) (kexec kc))
+            (#t kc)
+        )
+    )))
+    (define kexec (lambda (args) (let* (
+        (m (first args))
+        (c (second args))
+        (a (cdr (cdr args)))
+        (f (registry 'get m)))
+        (cond
+            ((null? f) (error "unknown function"))
+            (#t (f dispatch c a))
+        )
+    )))
+    (define getq (lambda (qid) ( do
+        (if (not (queues 'known qid)) (queues 'set qid (queue)) ())
+        (queues 'get qid)
+    )))
+    (define dispatch (lambda (m & args)
+        (cond
+            ((eq? m 'call) (kcall (car args) (cdr args)))
+            ((eq? m 'dequeue) ((getq (car args)) 'dequeue))
+            ((eq? m 'enqueue) ((getq (car args)) 'enqueue (cadr args)))
+            ((eq? m 'register) (let (
+                (service (car args))
+                (implementation (cadr args)))
+                (registry 'set service implementation)
+            ))
+            ((eq? m 'queues) queues)
+            ((eq? m 'registry) registry)
+        )
+    ))
+    dispatch
+)))
+
+(define k (kernel))
+(k 'register 'time
+    (lambda (k c args) (c (time.time))))
+
+(k 'call 'time)
+
+(timeit (lambda (_) (k 'call 'time)) 20)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+
 
 
 
