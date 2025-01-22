@@ -231,13 +231,34 @@
 
 (kadd 11 31)
 
-;(for (lambda (i) (kadd 11 31)) 1000)  ;; 18ms per
-;(for (lambda (i) ()) 1000) ;; 2ms per
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; slower recursive version, need tail call handling!
+;(define for (lambda (f n) ( do
+;    (define helper (lambda (f i n)
+;        (cond
+;          ((equal? n 0) ())
+;          (#t (do (f i) (helper f (add i 1) (sub n 1))))
+;        )
+;    ))
+;    (helper f 0 n)
+;)))
+
+(define timeit (lambda (f n) ( do
+    (define __define_timeit_t0__ (time.time))
+    (for f n)
+    (define t1 (time.time))
+    (define dt (sub t1 __define_timeit_t0__))
+    (list n dt (mul 1e6 (div dt n)) (div n dt))
+)))
+
+(timeit (lambda (_) ()) 10)
+(timeit (lambda (_) (kadd 11 31)) 10)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-
 
 
 
