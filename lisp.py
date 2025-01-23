@@ -909,9 +909,9 @@ def leval_(frame):
         if isinstance(x, Lambda):
             sym, args = x, EL
         else:
-            return bounce(frame.c, state, x)
+            return bounce(frame.c, x)
     else:
-        sym, args = car(state, listcheck(state, x)), cdr(state, x)
+        sym, args = car(listcheck(x)), cdr(x)
     if isinstance(sym, Symbol):
         try:
             op = SPECIALS.find(sym)[sym]
@@ -1392,7 +1392,7 @@ class lisp:
         env[symbol(str(name))] = value
 
     @staticmethod
-    def update(self):
+    def update():
         pass  ## actually does something in oo.py
 
     repl = repl

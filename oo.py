@@ -18,7 +18,7 @@
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-oo.py - builds on list.py and adds a working state class
+oo.py - builds on lisp.py and adds a working state class
 
 thoughts
     - no point in changing the lisp object representation to class-based:
@@ -327,6 +327,18 @@ def op_define(state, frame):
 
     state.fpush(frame, sym=sym)
     return bounce(leval_, state, Struct(frame, x=defn, c=op_define_cont))
+
+
+#def op_if_cont(state, value):
+#    frame = state.fpop()
+#    return bounce(leval_, state, Struct(frame, x=frame.y if value is EL else frame.x))
+#
+#
+#@spcl("if")
+#def op_if(state, frame):
+#    p, c, a = unpack(state, frame.x, 3)
+#    state.fpush(frame, x=c, y=a)
+#    return bounce(leval_, state, Struct(frame, x=p, c=op_if_cont))
 
 
 @spcl("lambda")
@@ -1316,23 +1328,25 @@ def repl(state, callback):
     return rc
 
 
-def main(force_repl=False):
+def main(force_repl=False, lisp_class=None):
+    state = lisp if lisp_class is None else lisp_class()
+
     def callback(sexpr):
         try:
-            value = leval(lisp, sexpr, lisp.globals)
+            value = leval(state, sexpr, state.globals)
         except:
             print("Offender (pyth):", sexpr)
             print(
                 "Offender (lisp):",
-                stringify(lisp, sexpr, lisp.globals),
+                stringify(state, sexpr, state.globals),
                 "\n",
             )
             raise
         if value is not EL:
-            print(stringify(lisp, value, lisp.globals))
+            print(stringify(state, value, state.globals))
 
     def eat(src):
-        p = Parser(lisp, callback)
+        p = Parser(state, callback)
         p.feed(src)
         p.feed(None)
 
@@ -1364,10 +1378,10 @@ def main(force_repl=False):
         stop = True
     if force_repl or not stop:
         try:
-            raise SystemExit(repl(lisp, callback))
+            raise SystemExit(repl(state, callback))
         finally:
-            if lisp.stack is not EL:
-                print("STACK", lisp.stack)
+            if state.stack is not EL:
+                print("STACK", state.stack)
 
 
 ## }}}

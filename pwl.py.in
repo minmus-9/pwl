@@ -19,7 +19,7 @@
 
 "pwl.py - python with lisp, full runtime"
 
-## pylint: disable=invalid-name
+## pylint: disable=invalid-name,too-many-lines
 ## XXX pylint: disable=missing-docstring
 
 from pylisp import lisp
