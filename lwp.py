@@ -9,6 +9,8 @@ import threading
 
 
 LOCK = threading.Lock()
+
+
 SENTINEL = object()
 
 
@@ -47,75 +49,118 @@ def land(*args):
 
 
 ## }}}
+## {{{ object representation
+
+class Representation:
 ## {{{ atoms
+    class EL_:
+        ## pylint: disable=too-few-public-methods
 
+        def __repr__(self):
+            return "()"
 
-class EL_:
-    ## pylint: disable=too-few-public-methods
+    EL = EL_()  ## empty list
+    del EL_
 
-    def __repr__(self):
-        return "()"
+    def is_empty_list(self, x):
+        return x is self.EL
 
+    class T_:
+        def __repr__(self):
+            return "#t"
 
-EL = EL_()
-del EL_
+    T = T_()  ## #t
+    del T_
 
+    def is_true(self, x):
+        return x is self.T
 
-def is_empty_list(x):
-    return x is EL
+    class Symbol(str):
+        ...
 
+    def is_symbol(self, x):
+        return isinstance(x, self.Symbol)
 
-class T_:
-    def __repr__(self):
-        return "#t"
+    def is_atom(self, x):
+        return (
+            self.is_empty_list(x)
+            or self.is_symbol(x)
+            or self.is_true(x)
+        )
 
-
-T = T_()
-del T_
-
-
-def is_true(x):
-    return x is T
-
-
-class Symbol(str):
-    ...
-
-
-def is_symbol(x):
-    return isinstance(x, Symbol)
-
-
-def is_integer(x):
-    return isinstance(x, int)
-
-
-def is_float(x):
-    return isinstance(x, float)
-
-
-def is_number(x):
-    return is_integer(x) or is_float(x)
-
-
-def is_atom(x):
-    return (
-        is_empty_list(x)
-        or is_symbol(x)
-        or is_true(x)
-    )
-
-
-def eq(x, y):
-    return is_atom(x) and x is y
-
+    def eq(self, x, y):
+        return self.is_atom(x) and x is y
 
 ## }}}
 ## {{{ compound types
 
+    ## pair and list
 
-def is_string(x):
-    return isinstance(x, str) and not is_symbol(x)
+    def Pair(list):
+        def __init__(self, car, cdr):
+            self[:] = [car, cdr]
 
+        @classmethod
+        def cons(cls, x, y):
+            return cls(x, y)
+
+        def car(self):
+            return self[0]
+
+        def cdr(self):
+            return self[1]
+
+        def set_car(self, x):
+            self[0] = x
+
+        def set_cdr(self, x):
+            self[1] = x
+
+    def is_pair(self, x):
+        return isinstance(x, self.Pair)
+
+    def is_list(self, x):
+        return self.is_pair(x) and self.is_pair(x.cdr())
+
+    def car(self, x):
+        if not self.is_pair(x):
+            raise TypeError(f"expected pair, got {x!r}")
+        return x.car()
+
+    def cdr(self, x):
+        if not self.is_pair(x):
+            raise TypeError(f"expected pair, got {x!r}")
+        return x.cdr()
+
+    def cons(self, x, y):
+        return self.Pair.cons(x, y)
+
+    def set_car(self, pair, x):
+        if not self.is_pair(pair):
+            raise TypeError(f"expected pair, got {pair!r}")
+        pair.set_car(x)
+
+    def set_cdr(self, pair, x):
+        if not self.is_pair(pair):
+            raise TypeError(f"expected pair, got {pair!r}")
+        pair.set_cdr(x)
+
+    ## string
+
+    def is_string(self, x):
+        return isinstance(x, str) and not self.is_symbol(x)
+
+    ### numbers
+
+    def is_integer(self, x):
+        ## pylint: disable=no-self-use
+        return isinstance(x, int)
+
+    def is_float(self, x):
+        ## pylint: disable=no-self-use
+        return isinstance(x, float)
+
+    def is_number(self, x):
+        return self.is_integer(x) or self.is_float(x)
 
 ## }}}
