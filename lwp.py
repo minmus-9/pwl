@@ -79,8 +79,6 @@ class Representation:
     ## }}}
     ## {{{ pair, string, number
 
-    ## pair and list
-
     class Pair(list):
         def __init__(self, rpn, car, cdr):
             super().__init__()
@@ -103,9 +101,6 @@ class Representation:
 
     def is_pair(self, x):
         return isinstance(x, self.Pair)
-
-    def is_list(self, x):
-        return self.is_pair(x) and self.is_pair(x.cdr())
 
     def car(self, x):
         if not self.is_pair(x):
@@ -153,7 +148,7 @@ class Representation:
         return self.is_integer(x) or self.is_float(x)
 
     ## }}}
-    ## {{{ constructors
+    ## {{{ factories
 
     def new_environment(self, params, args, parent):
         return Environment(self, params, args, parent)
@@ -175,6 +170,8 @@ class Representation:
 
 
 ## }}}
+
+
 ## }}}
 ## {{{ stack class
 
@@ -215,7 +212,7 @@ class Stack:
 class Frame:
     ## pylint: disable=too-few-public-methods
 
-    ## this is just a container and it doesn't use list primitives
+    ## this is just a c struct and it doesn't use list primitives for attr storage
 
     def __init__(self, *frames, **kw):
         for frame in frames:
@@ -298,9 +295,6 @@ class KeyedTable:
         self.cmp = compare
         self.t = rpn.EL
 
-    def set_compare(self, compare):
-        self.cmp = compare
-
     def get_data_structure(self):
         return self.t
 
@@ -366,8 +360,7 @@ class KeyedTable:
 
 class SymbolTable(KeyedTable):
     def __init__(self, rpn):
-        super().__init__(rpn, None)
-        self.set_compare(self.rpn.string_equal)
+        super().__init__(rpn, rpn.string_equal)
 
     def symbol(self, string):
         ## this should only be called with string literals and parsed strings
@@ -381,7 +374,7 @@ class SymbolTable(KeyedTable):
 
 
 class Globals:
-    ## this is just a container and it doesn't use list primitives
+    ## this is just a c struct and it doesn't use list primitives for attr storage
 
     REPRESENTATION_CLASS = Representation
 
@@ -393,7 +386,7 @@ class Globals:
         )
 
         self.stab = self.rpn.new_symbol_table()
-        self.env = self.rpn.new_environment(self.rpn.EL, self.rpn.EL, SENTINEL)
+        self.env = self.rpn.new_environment(self.rpn.EL, self.rpn.EL, self.rpn.EL)
 
 ## {{{ global symbol table
 
@@ -449,8 +442,7 @@ class Globals:
 class Environment:
     def __init__(self, rpn, params, args, parent):
         self.rpn = rpn
-        self.parent = parent
-        self.stab = rpn.new_symbol_table()
+        self.sp = rpn.cons(rpn.new_symbol_table(), parent)
         self.bind(params, args)
 
     def bind(self, params, args):
@@ -458,6 +450,27 @@ class Environment:
 
     def find(self, symbol):
         pass
+
+    def stab(self):
+        return self.rpn.car(self.sp)
+
+    def parent(self):
+        return self.rpn.cdr(self.sp)
+
+    ###
+
+    def delete(self, sym):
+        return self.stab.delete(sym)
+
+    def get(self, sym, default=SENTINEL):
+        pass
+
+    def set(self, sym, value):
+        return self.stab.set(sym, value)
+
+    def setbang(self, sym, value):
+        pass
+
 
 ## }}}
 ## }}}
