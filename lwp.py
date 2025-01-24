@@ -150,9 +150,6 @@ class Representation:
     ## }}}
     ## {{{ factories
 
-    def new_environment(self, params, args, parent):
-        return Environment(self, params, args, parent)
-
     def new_frame_stack(self):
         return FrameStack(self)
 
@@ -374,18 +371,20 @@ class SymbolTable(KeyedTable):
 
 
 class Environment:
-    def __init__(self, rpn, params, args, parent):
-        assert isinstance(parent, Environment) or rpn.is_empty_list(parent)
-        self.rpn = rpn
-        self.sp = rpn.cons(rpn.new_symbol_table(), parent)
+    def __init__(self, g, params, args, parent):
+        assert isinstance(parent, Environment) or g.rpn.is_empty_list(parent)
+        self.g = g
+        self.sp = g.rpn.cons(g.rpn.new_keyed_table(g.rpn.eq), parent)
         self.bind(params, args)
 
     def bind(self, params, args):
-        rpn = self.rpn
+        rpn = self.g.rpn
         variadic = False
         while not rpn.is_empty_list(params):
             if not rpn.is_pair(params):
                 raise RuntimeError("bad params")
+            if not rpn.is_pair(args):
+                raise RuntimeError("bad args")
             p, params = rpn.car(params), rpn.cdr(params)
             if not rpn.is_symbol(p):
                 raise TypeError(f"expected symbol, got {p!r}")
@@ -407,10 +406,10 @@ class Environment:
             raise SyntaxError("too many args")
 
     def stab(self):
-        return self.rpn.car(self.sp)
+        return self.g.rpn.car(self.sp)
 
     def parent(self):
-        return self.rpn.cdr(self.sp)
+        return self.g.rpn.cdr(self.sp)
 
     ###
 
@@ -418,7 +417,7 @@ class Environment:
         return self.stab().delete(sym)
 
     def get(self, sym, default=SENTINEL):
-        rpn = self.rpn
+        rpn = self.g.rpn
         e = self
         while not rpn.is_empty_list(e):
             x = e.stab().get(sym)
@@ -431,7 +430,7 @@ class Environment:
         return self.stab().set(sym, value)
 
     def setbang(self, sym, value):
-        rpn = self.rpn
+        rpn = self.g.rpn
         e = self
         while not rpn.is_empty_list(e):
             t = self.stab()
@@ -453,7 +452,9 @@ class Globals:
 
     REPRESENTATION_CLASS = Representation
 
-    def __init__(self, operator_class, representation=None, representation_class=None):
+    def __init__(
+        self, operator_class, representation=None, representation_class=None
+    ):
         self.rpn = (
             representation
             if representation
@@ -461,10 +462,9 @@ class Globals:
         )
 
         self.stab = self.rpn.new_symbol_table()
-        self.env = self.rpn.new_environment(
-            self.rpn.EL, self.rpn.EL, self.rpn.EL
-        )
+        self.stack = self.rpn.new_frame_stack()
         self.ops = operator_class(self)
+        self.genv, self.senv = self.ops.get_envs()
 
     ## {{{ global symbol table
 
@@ -512,8 +512,15 @@ class Globals:
         return SENTINEL
 
     ## }}}
-## {{{ 
-## }}}
+    ## {{{ decorators for dynamic addition of ops
+
+    def glbl(self, name):
+        return self.ops.glbl(name)
+
+    def spcl(self, name):
+        return self.ops.spcl(name)
+
+    ## }}}
 
 
 ## }}}
@@ -521,18 +528,16 @@ class Globals:
 
 
 def glbl(name):
-
     def wrap(func):
-        setattr(func, "lisp_op_type", "glbl")
+        setattr(func, "lisp_op_type", ("glbl", name))
         return func
 
     return wrap
 
 
 def spcl(name):
-
     def wrap(func):
-        setattr(func, "lisp_op_type", "spcl")
+        setattr(func, "lisp_op_type", ("spcl", name))
         return func
 
     return wrap
@@ -542,60 +547,118 @@ class Operators:
     ## this is a c struct
 
     ## pylint bait
-    GLOBALS_ATTRS_ = SPECIAL_ATTRS_ = {}
+    GLOBAL_ATTRS_ = SPECIAL_ATTRS_ = {}
 
-    def __init__(self):
-        self.GLOBALS = {}
-        self.SPECIALS = {}
+    def __init__(self, g):
+        self.g = g
+        self.GLOBALS = Environment(g, g.rpn.EL, g.rpn.EL, g.rpn.EL)
+        self.SPECIALS = Environment(g, g.rpn.EL, g.rpn.EL, g.rpn.EL)
         for k in self.GLOBAL_ATTRS_:
             value = getattr(self, k, None)
-            if callable(k):
-                self.GLOBALS[k] = value
+            if callable(value) and hasattr(value, "lisp_op_type"):
+                sym = g.symbol(value.lisp_op_type[1])
+                self.GLOBALS.set(sym, value)
         for k in self.SPECIAL_ATTRS_:
             value = getattr(self, k, None)
-            if callable(k):
-                self.SPECIALS[k] = value
+            if callable(value) and hasattr(value, "lisp_op_type"):
+                sym = g.symbol(value.lisp_op_type[1])
+                self.SPECIALS.set(sym, value)
 
     @classmethod
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
         glbls = {}
         spcls = {}
-        lut = { "glbl": glbls, "spcl": spcls }
+        lut = {"glbl": glbls, "spcl": spcls}
         for attr in dir(cls):
             value = getattr(cls, attr)
             tag = getattr(value, "lisp_op_type", None)
             if tag is not None:
-                lut[tag].setdefault(attr)
+                lut[tag[0]].setdefault(attr)
         cls.GLOBAL_ATTRS_ = glbls
         cls.SPECIAL_ATTRS_ = spcls
 
-    def search_glbl(self, name):
-        return self.GLOBALS.get(name, SENTINEL)
-
-    def search_spcl(self, name):
-        return self.SPECIALS.get(name, SENTINEL)
+    def get_envs(self):
+        return self.GLOBALS, self.SPECIALS
 
     ### dynamic op addition
 
     def glbl(self, name):
-
         def wrap(func):
-            self.GLOBALS[name] = func
+            self.GLOBALS.set(self.g.symbol(name), func)
             return func
 
         return wrap
 
     def spcl(self, name):
-
         def wrap(func):
-            self.SPECIALS[name] = func
+            self.SPECIALS.set(self.g.symbol(name), func)
             return func
 
         return wrap
 
+
+## }}}
+## {{{ special forms
+
+
+class SpecialForms(Operators):
+    def op_define_cont(self, g, value):
+        ## pylint: disable=no-self-use
+        frame = g.stack.pop()
+        sym = frame.x
+        frame.e.set(sym, value)
+        return bounce(frame.c, g, g.rpn.EL)
+
+    @spcl("define")
+    def op_define(self, g, frame):
+        sym, defn = g.unpack(frame.x, 2)
+
+        if not g.rpn.is_symbol(sym):
+            raise TypeError(f"expected symbol, got {sym!r}")
+
+        g.stack.fpush(frame, x=sym)
+        return bounce(g.eval_, g, Frame(frame, x=defn, c=self.op_define_cont))
+
+    def op_if_cont(self, g, value):
+        ## pylint: disable=no-self-use
+        frame = g.stack.pop()
+        ca = frame.x
+        sexpr = g.rpn.cdr(ca) if g.rpn.is_empty_list(value) else g.rpn.car(ca)
+        return bounce(g.eval_, g, Frame(frame, x=sexpr))
+
+    @spcl("if")
+    def op_if(self, g, frame):
+        p, c, a = g.unpack(frame.x, 3)
+        g.stack.fpush(frame, x=g.rpn.cons(c, a))
+        return bounce(g.eval_, g, Frame(frame, x=p, c=self.op_if_cont))
+
+    @spcl("lambda")
+    def op_lambda(self, g, frame):
+        params, body = g.unpack(frame.x, 2)
+
+        if not (g.rpn.is_pair(params) or g.rpn.is_empty_list(params)):
+            raise TypeError("expected param list, got {params!r}")
+
+        return bounce(frame.c, g, Lambda(g, params, body, frame.e))
+
+    @spcl("quote")
+    def op_quote(self, g, frame):
+        ## pylint: disable=no-self-use
+        (x,) = g.unpack(frame.x, 1)
+        return bounce(frame.c, g, x)
+
+
 ## }}}
 
-r = Representation()
-g = Globals(r)
-assert r.eq(g.symbol("a"), g.symbol("ab"[0]))
+
+def test():
+    g = Globals(SpecialForms)
+    assert g.rpn.eq(g.symbol("a"), g.symbol("ab"[0]))
+
+
+if __name__ == "__main__":
+    test()
+
+
+## EOF
