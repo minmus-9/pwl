@@ -35,8 +35,7 @@ def land(*args):
 
 
 class Representation:
-    def __init__(self):
-        self.symtab = self.new_symbol_table()
+    ## pylint: disable=too-many-public-methods
 
     ## {{{ atoms
     class EL_:
@@ -67,9 +66,6 @@ class Representation:
         ...
 
     ## symbols are unique within the scope of a Representation instance
-
-    def symbol(self, string):
-        return self.symtab.symbol(string)
 
     def is_symbol(self, x):
         return isinstance(x, self.Symbol)
@@ -159,6 +155,9 @@ class Representation:
     ## }}}
     ## {{{ constructors
 
+    def new_environment(self, params, args, parent):
+        return Environment(self, params, args, parent)
+
     def new_frame_stack(self):
         return FrameStack(self)
 
@@ -168,8 +167,8 @@ class Representation:
     def new_stack(self):
         return Stack(self)
 
-    def new_string_keyed_table(self):
-        return StringKeyedTable(self)
+    def new_keyed_table(self, compare):
+        return KeyedTable(self, compare)
 
     def new_symbol_table(self):
         return SymbolTable(self)
@@ -215,6 +214,8 @@ class Stack:
 
 class Frame:
     ## pylint: disable=too-few-public-methods
+
+    ## this is just a container and it doesn't use list primitives
 
     def __init__(self, *frames, **kw):
         for frame in frames:
@@ -286,13 +287,19 @@ class Queue:
 
 
 ## }}}
-## {{{ string keyed table
+## {{{ keyed table
 
 
-class StringKeyedTable:
-    def __init__(self, rpn):
+class KeyedTable:
+    ## NB compare() has to do its own type-checking! this also means
+    ##    that it needs to be bound to the same Representation!
+    def __init__(self, rpn, compare):
         self.rpn = rpn
+        self.cmp = compare
         self.t = rpn.EL
+
+    def set_compare(self, compare):
+        self.cmp = compare
 
     def get_data_structure(self):
         return self.t
@@ -301,15 +308,12 @@ class StringKeyedTable:
         self.t = t
 
     def find(self, key):
-        if not self.rpn.is_string(key):
-            raise TypeError(f"expected string, got {key!r}")
-
         prev = self.rpn.EL
         node = self.t
 
         while not self.rpn.is_empty_list(node):
             pair = self.rpn.car(node)
-            if self.rpn.string_equal(key, self.rpn.car(pair)):
+            if self.cmp(key, self.rpn.car(pair)):
                 return prev, node
             prev = node
             node = self.rpn.cdr(node)
@@ -355,21 +359,110 @@ class StringKeyedTable:
             value = self.rpn.cdr(pair)
         return value
 
+
 ## }}}
 ## {{{ symbol table
 
 
-class SymbolTable(StringKeyedTable):
+class SymbolTable(KeyedTable):
+    def __init__(self, rpn):
+        super().__init__(rpn, None)
+        self.set_compare(self.rpn.string_equal)
+
     def symbol(self, string):
         ## this should only be called with string literals and parsed strings
-        if type(string) is not str:  ## pylint: disable=unidiomatic-type-check
+        if type(string) is not str:  ## pylint: disable=unidiomatic-typecheck
             raise TypeError(f"expected string, got {string!r}")
-        return self.t.setdefault(string, self.rpn.Symbol(string))
+        return self.setdefault(string, self.rpn.Symbol(string))
 
 
+## }}}
+## {{{ globals class
+
+
+class Globals:
+    ## this is just a container and it doesn't use list primitives
+
+    REPRESENTATION_CLASS = Representation
+
+    def __init__(self, representation=None, representation_class=None):
+        self.rpn = (
+            representation
+            if representation
+            else (representation_class or self.REPRESENTATION_CLASS)()
+        )
+
+        self.stab = self.rpn.new_symbol_table()
+        self.env = self.rpn.new_environment(self.rpn.EL, self.rpn.EL, SENTINEL)
+
+## {{{ global symbol table
+
+    def symbol(self, string):
+        return self.stab.symbol(string)
+
+## }}}
+    ## {{{ argument unpacker
+
+    def unpack(self, lst, n):
+        rpn = self.rpn
+        ret = []
+        for _ in range(n):
+            if rpn.is_empty_list(lst):
+                raise TypeError(f"not enough args, expected {n}")
+            if not rpn.is_pair(lst):
+                ## so we know we're a list at each iteration
+                raise RuntimeError("bad list passed to unpack()")
+            ret.append(rpn.car(lst))
+            lst = rpn.cdr(lst)
+        if not rpn.is_empty_list(lst):
+            raise TypeError(f"too many args, expected {n}")
+        return ret
+
+    ## }}}
+    ## {{{ (partial) obj-to-type-symbol
+
+    def type(self, x):
+        ## pylint: disable=too-many-return-statements
+        rpn = self.rpn
+        if rpn.is_empty_list(x):
+            return self.symbol("()")
+        if rpn.is_true(x):
+            return self.symbol("#t")
+        if rpn.is_pair(x):
+            return self.symbol("pair")
+        if rpn.is_symbol(x):
+            return self.symbol("symbol")
+        if rpn.is_integer(x):
+            return self.symbol("integer")
+        if rpn.is_float(x):
+            return self.symbol("float")
+        if rpn.is_string(x):
+            return self.symbol("string")
+        return SENTINEL
+
+    ## }}}
+
+## }}}
+## {{{ environment
+
+
+class Environment:
+    def __init__(self, rpn, params, args, parent):
+        self.rpn = rpn
+        self.parent = parent
+        self.stab = rpn.new_symbol_table()
+        self.bind(params, args)
+
+    def bind(self, params, args):
+        pass
+
+    def find(self, symbol):
+        pass
+
+## }}}
 ## }}}
 
 r = Representation()
-assert r.eq(r.symbol("a"), r.symbol("ab"[0]))
+g = Globals(r)
+assert r.eq(g.symbol("a"), g.symbol("ab"[0]))
 
-## }}}
