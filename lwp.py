@@ -453,7 +453,7 @@ class Globals:
 
     REPRESENTATION_CLASS = Representation
 
-    def __init__(self, representation=None, representation_class=None):
+    def __init__(self, operator_class, representation=None, representation_class=None):
         self.rpn = (
             representation
             if representation
@@ -464,6 +464,7 @@ class Globals:
         self.env = self.rpn.new_environment(
             self.rpn.EL, self.rpn.EL, self.rpn.EL
         )
+        self.ops = operator_class(self)
 
     ## {{{ global symbol table
 
@@ -511,19 +512,87 @@ class Globals:
         return SENTINEL
 
     ## }}}
+## {{{ 
+## }}}
 
 
 ## }}}
-## {{{ registry class
+## {{{ operator support
 
 
-class Registry:
-    pass
+def glbl(name):
+
+    def wrap(func):
+        setattr(func, "lisp_op_type", "glbl")
+        return func
+
+    return wrap
 
 
-## }}}
-## {{{ special form support
+def spcl(name):
 
+    def wrap(func):
+        setattr(func, "lisp_op_type", "spcl")
+        return func
+
+    return wrap
+
+
+class Operators:
+    ## this is a c struct
+
+    ## pylint bait
+    GLOBALS_ATTRS_ = SPECIAL_ATTRS_ = {}
+
+    def __init__(self):
+        self.GLOBALS = {}
+        self.SPECIALS = {}
+        for k in self.GLOBAL_ATTRS_:
+            value = getattr(self, k, None)
+            if callable(k):
+                self.GLOBALS[k] = value
+        for k in self.SPECIAL_ATTRS_:
+            value = getattr(self, k, None)
+            if callable(k):
+                self.SPECIALS[k] = value
+
+    @classmethod
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        glbls = {}
+        spcls = {}
+        lut = { "glbl": glbls, "spcl": spcls }
+        for attr in dir(cls):
+            value = getattr(cls, attr)
+            tag = getattr(value, "lisp_op_type", None)
+            if tag is not None:
+                lut[tag].setdefault(attr)
+        cls.GLOBAL_ATTRS_ = glbls
+        cls.SPECIAL_ATTRS_ = spcls
+
+    def search_glbl(self, name):
+        return self.GLOBALS.get(name, SENTINEL)
+
+    def search_spcl(self, name):
+        return self.SPECIALS.get(name, SENTINEL)
+
+    ### dynamic op addition
+
+    def glbl(self, name):
+
+        def wrap(func):
+            self.GLOBALS[name] = func
+            return func
+
+        return wrap
+
+    def spcl(self, name):
+
+        def wrap(func):
+            self.SPECIALS[name] = func
+            return func
+
+        return wrap
 
 ## }}}
 
