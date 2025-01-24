@@ -5,10 +5,20 @@
 ## pylint: disable=invalid-name,too-many-lines
 ## XXX pylint: disable=missing-docstring
 
+import sys
+
 
 SENTINEL = object()
 
 
+## {{{ error
+
+
+class LispError(Exception):
+    ...
+
+
+## }}}
 ## {{{ trampoline
 
 
@@ -521,6 +531,92 @@ class Globals:
         return self.ops.spcl(name)
 
     ## }}}
+    ## {{{ eval
+
+    def eval(self, sexpr, genv=SENTINEL, senv=SENTINEL):
+        e = self.genv if genv is SENTINEL else genv
+        s = self.senv if senv is SENTINEL else senv
+        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, s=s, c=land))
+
+    ## }}}
+    ## {{{ stringify
+
+    def stringify(self, sexpr, genv=SENTINEL, senv=SENTINEL):
+        e = self.genv if genv is SENTINEL else genv
+        s = self.senv if senv is SENTINEL else senv
+        return trampoline(
+            self.stringify_, self, Frame(x=sexpr, e=e, s=s, c=land)
+        )
+
+    ## }}}
+
+
+## }}}
+## {{{ lambda
+
+
+class Lambda:
+    special = False
+
+    def __init__(
+        self, g, params, body, genv, senv
+    ):  ## pylint: disable=too-many-arguments
+        self.r = g.rpn
+        cons = g.rpn.cons
+        self.info = cons(params, cons(body, cons(genv, cons(senv, g.rpn.EL))))
+
+    def params(self):
+        return self.r.car(self.info)
+
+    def body(self):
+        return self.r.car(self.r.cdr(self.info))
+
+    def genv(self):
+        return self.r.car(self.r.cdr(self.r.cdr(self.info)))
+
+    def senv(self):
+        return self.r.car(self.r.cdr(self.r.cdr(self.r.cdr(self.info))))
+
+    def set_special(self):
+        self.special = True
+
+    def __call__(self, g, frame):
+        args = frame.x
+        parent = (
+            frame.e if self.special else self.genv()
+        )  ## specials are weird
+        e = Environment(g, self.params(), args, parent)
+        s = Environment(g, g.rpn.EL, g.rpn.EL, frame.s)
+        return bounce(g.eval_, g, Frame(frame, x=self.body(), e=e, s=s))
+
+    ###
+
+    def lambda_body_done(self, g, bodystr):
+        ## pylint: disable=no-self-use
+        frame = g.stack.fpop()
+        paramstr = frame.x
+        return bounce(frame.c, g, "(lambda " + paramstr + " " + bodystr + ")")
+
+    def lambda_params_done(self, g, paramstr):
+        ## pylint: disable=no-self-use
+        frame = g.stack.fpop()
+        body = frame.x
+        g.state.fpush(frame, x=paramstr)
+        return bounce(
+            g.stringify_, g, Frame(frame, x=body, c=self.lambda_body_done)
+        )
+
+    def stringify(self, g, frame):
+        g.stack.fpush(frame, x=self.body())
+        return bounce(
+            g.stringify_,
+            g,
+            Frame(frame, x=self.params(), c=self.lambda_params_done),
+        )
+
+
+def is_lambda(x):
+    return isinstance(x, Lambda)
 
 
 ## }}}
@@ -620,6 +716,8 @@ class SpecialForms(Operators):
         g.stack.fpush(frame, x=sym)
         return bounce(g.eval_, g, Frame(frame, x=defn, c=self.op_define_cont))
 
+    ###
+
     def op_if_cont(self, g, value):
         ## pylint: disable=no-self-use
         frame = g.stack.pop()
@@ -633,20 +731,186 @@ class SpecialForms(Operators):
         g.stack.fpush(frame, x=g.rpn.cons(c, a))
         return bounce(g.eval_, g, Frame(frame, x=p, c=self.op_if_cont))
 
+    ###
+
     @spcl("lambda")
     def op_lambda(self, g, frame):
+        ## pylint: disable=no-self-use
         params, body = g.unpack(frame.x, 2)
 
         if not (g.rpn.is_pair(params) or g.rpn.is_empty_list(params)):
             raise TypeError("expected param list, got {params!r}")
 
-        return bounce(frame.c, g, Lambda(g, params, body, frame.e))
+        return bounce(frame.c, g, Lambda(g, params, body, frame.e, frame.s))
+
+    ## this follows https://blog.veitheller.de/Lets_Build_a_Quasiquoter.html
+    ## (special) doesn't quite get the job done due to the way its env works.
+    ## it ain't the same as a recursive scheme macro :-) this quasiquote impl
+    ## is longer than the rest of the special forms combined (!), but it
+    ## helps the bootstrap a lot.
+
+    def qq_list_setup(self, g, frame, form):
+        rpn = g.rpn
+        elt, form = rpn.car(form), rpn.cdr(form)
+        if not (rpn.is_pair(form) or rpn.is_empty_list(form)):
+            raise TypeError(f"expected list, got {form!r}")
+        g.stack.fpush(frame, x=form)
+        return bounce(
+            self.qq_list_next, g, Frame(frame, x=elt, c=self.qq_list_cont)
+        )
+
+    def qq_finish(self, g, frame, value):
+        ## pylint: disable=no-self-use
+        rpn = g.rpn
+        res = rpn.EL if value is SENTINEL else rpn.cons(value, rpn.EL)
+        while True:
+            f = g.stack.fpop()
+            if f.x is SENTINEL:
+                break
+            res = rpn.cons(f.x, res)
+        return bounce(frame.c, g, res)
+
+    def qq_list_cont(self, g, value):
+        frame = g.stack.fpop()
+        form = frame.x
+
+        if g.rpn.is_empty_list(form):
+            return bounce(self.qq_finish, frame, value)
+
+        g.stack.fpush(frame, x=value)
+
+        return self.qq_list_setup(g, frame, form)
+
+    def qq_spliced(self, g, value):
+        frame = g.stack.fpop()
+        form = frame.x
+        rpn = g.rpn
+
+        if rpn.is_empty_list(value):
+            if rpn.is_empty_list(form):
+                return bounce(self.qq_finish, g, frame, SENTINEL)
+            return self.qq_list_setup(g, frame, form)
+
+        while not rpn.is_empty_list(value):
+            if not rpn.is_pair(value):
+                raise TypeError(f"expected list, got {value!r}")
+            elt, value = rpn.car(value), rpn.cdr(value)
+            if rpn.is_empty_list(value):
+                g.stack.fpush(frame, x=form)
+                return bounce(self.qq_list_cont, g, elt)
+            g.stack.fpush(frame, x=elt)
+
+        raise RuntimeError("logs in the bedpan")
+
+    def qq_list_next(self, g, frame):
+        elt = frame.x
+        rpn = g.rpn
+
+        if rpn.is_pair(elt) and rpn.eq(
+            rpn.car(elt), g.symbol("unquote-splicing")
+        ):
+            _, x = g.unpack(elt, 2)
+            return bounce(g.eval_, g, Frame(frame, x=x, c=self.qq_spliced))
+        return bounce(self.qq, g, Frame(frame, x=elt, c=self.qq_list_cont))
+
+    def qq_list(self, g, frame):
+        rpn = g.rpn
+        form = frame.x
+        app = rpn.car(form)
+
+        if app is g.symbol("quasiquote"):
+            _, x = g.unpack(form, 2)
+            return bounce(self.qq, g, Frame(frame, x=x))
+
+        if app is g.symbol("unquote"):
+            _, x = g.unpack(form, 2)
+            return bounce(g.eval_, g, Frame(frame, x=x))
+
+        if app is g.symbol("unquote-splicing"):
+            _, x = g.unpack(form, 2)
+            raise LispError("cannot use unquote-splicing here")
+
+        g.stack.fpush(frame, x=SENTINEL)
+
+        return self.qq_list_setup(g, frame, form)
+
+    def qq(self, g, frame):
+        form = frame.x
+        if g.rpn.is_pair(form):
+            return bounce(self.qq_list, g, frame)
+        return bounce(frame.c, g, form)
+
+    @spcl("quasiquote")
+    def op_quasiquote(self, g, frame):
+        (form,) = g.unpack(frame.x, 1)
+        return bounce(self.qq, g, Frame(frame, x=form))
+
+    ###
 
     @spcl("quote")
     def op_quote(self, g, frame):
         ## pylint: disable=no-self-use
         (x,) = g.unpack(frame.x, 1)
         return bounce(frame.c, g, x)
+
+    ###
+
+    def op_setbang_cont(self, g, defn):
+        ## pylint: disable=no-self-use
+        frame = g.stack.fpop()
+        sym = frame.x
+        frame.e.setbang(sym, defn)
+        return bounce(frame.c, g, g.rpn.EL)
+
+    @spcl("set!")
+    def op_setbang(self, g, frame):
+        sym, defn = g.unpack(frame.x, 2)
+        if not g.rpn.is_symbol(sym):
+            raise TypeError(f"expected symbol, got {sym!r}")
+        g.stack.fpush(frame, x=sym)
+        return bounce(
+            g.eval_, g, Frame(frame, x=defn, c=self.op_setbang_cont)
+        )
+
+    ###
+
+    def op_special_cont(self, g, value):
+        ## pylint: disable=no-self-use
+        frame = g.stack.pop()
+        sym = frame.x
+        frame.s.set(sym, value)
+        return bounce(frame.c, g, g.rpn.EL)
+
+    @spcl("special")
+    def op_special(self, g, frame):
+        sym, defn = g.unpack(frame.x, 2)
+
+        if not g.rpn.is_symbol(sym):
+            raise TypeError(f"expected symbol, got {sym!r}")
+
+        g.stack.fpush(frame, x=sym)
+        return bounce(
+            g.eval_, g, Frame(frame, x=defn, c=self.op_special_cont)
+        )
+
+    ###
+
+    @spcl("trap")
+    def op_trap(self, g, frame):
+        ## pylint: disable=no-self-use
+        (x,) = g.unpack(frame.x, 1)
+        ok = g.rpn.T
+        try:
+            ## this has to be recursive because you can't pass
+            ## exceptions across the trampoline. there is a chance
+            ## of blowing the python stack here if you do a deeply
+            ## recursive trap.
+            res = g.eval(x, frame.e, frame.s)
+        except:  ## pylint: disable=bare-except
+            ok = g.rpn.EL
+            t, v = sys.exc_info()[:2]
+            res = f"{t.__name__}: {str(v)}"
+        return bounce(frame.c, g, g.rpn.cons(ok, g.rpn.cons(res, g.rpn.EL)))
 
 
 ## }}}
