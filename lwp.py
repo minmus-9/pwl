@@ -620,6 +620,27 @@ def is_lambda(x):
 
 
 ## }}}
+## {{{ continuations
+
+
+class Continuation:
+    ## pylint: disable=too-few-public-methods
+
+    def __init__(self, g, continuation):
+        self.continuation = continuation  ## a python func
+        self.stack = g.stack.get_data_structure()
+
+    def __call__(self, g, frame):
+        (x,) = g.unpack(frame.x, 1)
+        g.stack.set_data_structure(self.stack)
+        return bounce(self.continuation, g, x)  ## that's it.
+
+
+def is_continuation(x):
+    return isinstance(x, Continuation)
+
+
+## }}}
 ## {{{ operator support
 
 
@@ -695,10 +716,14 @@ class Operators:
 
 
 ## }}}
-## {{{ special forms
+## {{{ base operators
 
 
-class SpecialForms(Operators):
+class BaseOperators(Operators):
+    ## pylint: disable=too-many-public-methods
+
+    ## {{{ special forms
+
     def op_define_cont(self, g, value):
         ## pylint: disable=no-self-use
         frame = g.stack.pop()
@@ -912,12 +937,190 @@ class SpecialForms(Operators):
             res = f"{t.__name__}: {str(v)}"
         return bounce(frame.c, g, g.rpn.cons(ok, g.rpn.cons(res, g.rpn.EL)))
 
+    ## }}}
+    ## {{{ operators
+
+    def unary(self, g, frame, func):
+        ## pylint: disable=no-self-use
+        (x,) = g.unpack(frame.x, 1)
+        return bounce(frame.c, g, func(x))
+
+    def binary(self, g, frame, func):
+        ## pylint: disable=no-self-use
+        x, y = g.unpack(frame.x, 2)
+        return bounce(frame.c, g, func(x, y))
+
+    @glbl("atom?")
+    def op_atom(self, g, frame):
+        rpn = g.rpn
+
+        def f(x):
+            return rpn.T if rpn.is_atom(x) else rpn.EL
+
+        return self.unary(g, frame, f)
+
+    @glbl("call/cc")
+    @glbl("call-with-current-continuation")
+    def op_callcc(self, g, frame):
+        ## pylint: disable=no-self-use
+        (x,) = g.unpack(frame.x, 1)
+        if not callable(x):
+            raise TypeError(f"expected callable, got {x!r}")
+        cc = Continuation(g, frame.c)
+        arg = g.rpn.cons(cc, g.rpn.EL)
+        return bounce(x, g, Frame(frame, x=arg))
+
+    @glbl("car")
+    def op_car(self, g, frame):
+        return self.unary(g, frame, g.rpn.car)
+
+    @glbl("cdr")
+    def op_cdr(self, g, frame):
+        return self.unary(g, frame, g.rpn.cdr)
+
+    @glbl("cons")
+    def op_cons(self, g, frame):
+        return self.binary(g, frame, g.rpn.cons)
+
+    @glbl("div")
+    def op_div(self, g, frame):
+        rpn = g.rpn
+
+        def f(x, y):
+            ## XXX implicitly assuming integer == int!
+            if rpn.is_integer(x) and rpn.is_integer(y):
+                return x // y
+            return x / y
+
+        return self.binary(g, frame, f)
+
+    @glbl("eq?")
+    def op_eq(self, g, frame):
+        rpn = g.rpn
+
+        def f(x, y):
+            return rpn.T if rpn.eq(x, y) else rpn.EL
+
+        return self.binary(g, frame, f)
+
+    @glbl("equal?")
+    def op_equal(self, g, frame):
+        rpn = g.rpn
+
+        def f(x, y):
+            if not (rpn.is_number(x) and rpn.is_number(y)):
+                raise TypeError(f"expected numbers, got {x!r} {y!r}")
+
+            return rpn.T if x == y else rpn.EL
+
+        return self.binary(g, frame, f)
+
+    @glbl("error")
+    def op_error(self, g, frame):
+        ## pylint: disable=no-self-use
+        (x,) = g.unpack(frame.x, 1)
+        raise LispError(x)
+
+    @glbl("eval")
+    def op_eval(self, g, frame):
+        ## pylint: disable=no-self-use
+        rpn = g.rpn
+
+        try:
+            (x,) = g.unpack(frame.x, 1)
+            n_up = 0
+        except TypeError:
+            x, n_up = g.unpack(frame.x, 2)
+
+        if rpn.is_string(x):
+            l = []
+            p = Parser(g, l.append)
+            p.feed(str(x))  ## XXX implicit conversion from lisp -> str
+            p.feed(None)
+            x = l[-1] if l else rpn.EL
+        e = frame.e
+        s = frame.s
+        for _ in range(n_up):
+            e = e.parent()
+            s = s.parent()
+            if rpn.is_empty_list(e) or rpn.is_empty_list(s):
+                raise ValueError(f"cannot go up {n_up} levels")
+        return bounce(g.eval_, g, Frame(frame, x=x, e=e, s=s))
+
+    ###
+
+    def op_exit_cont(self, g, value):
+        ## pylint: disable=no-self-use
+        raise SystemExit(value)
+
+    @glbl("exit")
+    def op_exit(self, g, frame):
+        (x,) = g.unpack(frame.x, 1)
+        if g.rpn.is_integer(x):
+            raise SystemExit(x)
+        return bounce(g.stringify_, g, Frame(frame, x=x, c=self.op_exit_cont))
+
+    ###
+
+    @glbl("lt?")
+    def op_lt(self, g, frame):
+        rpn = g.rpn
+
+        def f(x, y):
+            if not (rpn.is_number(x) and rpn.is_number(y)):
+                raise TypeError(f"expected numbers, got {x!r} and {y!r}")
+            return rpn.T if x < y else rpn.EL
+
+        return self.binary(g, frame, f)
+
+    @glbl("mul2")
+    def op_mul2(self, g, frame):
+        rpn = g.rpn
+
+        def f(x, y):
+            if not (rpn.is_number(x) and rpn.is_number(y)):
+                raise TypeError(f"expected numbers, got {x!r} and {y!r}")
+            return x * y  ## XXX implicit conversion from python to lisp
+
+        return self.binary(g, frame, f)
+
+    @glbl("nand")
+    def op_nand(self, g, frame):
+        rpn = g.rpn
+
+        def f(x, y):
+            if not (rpn.is_integer(x) and rpn.is_integer(y)):
+                raise TypeError(f"expected integers, got {x!r} and {y!r}")
+            return ~(x & y)  ## XXX implicit conversion
+
+        return self.binary(g, frame, f)
+
+    ###
+
+    def op_print_cont(self, g, value):
+        ...
+
+    @glbl("print")
+    def op_print(self, g, frame):
+        pass
+
+
+    ## }}}
+
+
+## }}}
+## {{{ lisp class
+
+
+class Lisp:
+    ...
+
 
 ## }}}
 
 
 def test():
-    g = Globals(SpecialForms)
+    g = Globals(BaseOperators)
     assert g.rpn.eq(g.symbol("a"), g.symbol("ab"[0]))
 
 
