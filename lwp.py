@@ -369,5 +369,7 @@ class SymbolTable(StringKeyedTable):
 
 ## }}}
 
+r = Representation()
+assert r.eq(r.symbol("a"), r.symbol("ab"[0]))
 
 ## }}}
