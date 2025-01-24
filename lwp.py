@@ -370,6 +370,81 @@ class SymbolTable(KeyedTable):
 
 
 ## }}}
+## {{{ environment
+
+
+class Environment:
+    def __init__(self, rpn, params, args, parent):
+        assert isinstance(parent, Environment) or rpn.is_empty_list(parent)
+        self.rpn = rpn
+        self.sp = rpn.cons(rpn.new_symbol_table(), parent)
+        self.bind(params, args)
+
+    def bind(self, params, args):
+        rpn = self.rpn
+        variadic = False
+        while not rpn.is_empty_list(params):
+            if not rpn.is_pair(params):
+                raise RuntimeError("bad params")
+            p, params = rpn.car(params), rpn.cdr(params)
+            if not rpn.is_symbol(p):
+                raise TypeError(f"expected symbol, got {p!r}")
+            if rpn.eq(p, rpn.symbol("&")):
+                variadic = True
+            elif variadic:
+                if not rpn.is_empty_list(params):
+                    raise SyntaxError("too many params after '&'")
+                self.set(p, args)
+                return
+            elif rpn.is_empty_list(args):
+                raise SyntaxError("not enough args")
+            else:
+                self.set(p, rpn.car(args))
+                args = rpn.cdr(args)
+        if variadic:
+            raise SyntaxError("args end with '&'")
+        if not rpn.is_empty_list(args):
+            raise SyntaxError("too many args")
+
+    def stab(self):
+        return self.rpn.car(self.sp)
+
+    def parent(self):
+        return self.rpn.cdr(self.sp)
+
+    ###
+
+    def delete(self, sym):
+        return self.stab().delete(sym)
+
+    def get(self, sym, default=SENTINEL):
+        rpn = self.rpn
+        e = self
+        while not rpn.is_empty_list(e):
+            x = e.stab().get(sym)
+            if x is not SENTINEL:
+                return x
+            e = e.parent()
+        return default
+
+    def set(self, sym, value):
+        return self.stab().set(sym, value)
+
+    def setbang(self, sym, value):
+        rpn = self.rpn
+        e = self
+        while not rpn.is_empty_list(e):
+            t = self.stab()
+            ## XXX could add a table method for this
+            x = t.get(sym)
+            if x is not SENTINEL:
+                t.set(sym, value)
+                break
+            e = e.parent()
+        return rpn.EL
+
+
+## }}}
 ## {{{ globals class
 
 
@@ -386,14 +461,16 @@ class Globals:
         )
 
         self.stab = self.rpn.new_symbol_table()
-        self.env = self.rpn.new_environment(self.rpn.EL, self.rpn.EL, self.rpn.EL)
+        self.env = self.rpn.new_environment(
+            self.rpn.EL, self.rpn.EL, self.rpn.EL
+        )
 
-## {{{ global symbol table
+    ## {{{ global symbol table
 
     def symbol(self, string):
         return self.stab.symbol(string)
 
-## }}}
+    ## }}}
     ## {{{ argument unpacker
 
     def unpack(self, lst, n):
@@ -435,47 +512,21 @@ class Globals:
 
     ## }}}
 
+
 ## }}}
-## {{{ environment
+## {{{ registry class
 
 
-class Environment:
-    def __init__(self, rpn, params, args, parent):
-        self.rpn = rpn
-        self.sp = rpn.cons(rpn.new_symbol_table(), parent)
-        self.bind(params, args)
-
-    def bind(self, params, args):
-        pass
-
-    def find(self, symbol):
-        pass
-
-    def stab(self):
-        return self.rpn.car(self.sp)
-
-    def parent(self):
-        return self.rpn.cdr(self.sp)
-
-    ###
-
-    def delete(self, sym):
-        return self.stab.delete(sym)
-
-    def get(self, sym, default=SENTINEL):
-        pass
-
-    def set(self, sym, value):
-        return self.stab.set(sym, value)
-
-    def setbang(self, sym, value):
-        pass
+class Registry:
+    pass
 
 
 ## }}}
+## {{{ special form support
+
+
 ## }}}
 
 r = Representation()
 g = Globals(r)
 assert r.eq(g.symbol("a"), g.symbol("ab"[0]))
-
