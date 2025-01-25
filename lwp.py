@@ -425,6 +425,12 @@ class Environment:
         if not rpn.is_empty_list(args):
             raise SyntaxError("too many args")
 
+    def get_data_structure(self):
+        p = self.parent()
+        if not self.g.rpn.is_empty_list(p):
+            p = p.get_data_structure()
+        return self.g.rpn.cons(self.stab().get_data_structure(), p)
+
     def stab(self):
         return self.g.rpn.car(self.sp)
 
@@ -454,15 +460,14 @@ class Environment:
         rpn = self.g.rpn
         e = self
         while not rpn.is_empty_list(e):
-            t = self.stab()
+            t = e.stab()
             ## XXX could add a table method for this
             x = t.get(sym)
             if x is not SENTINEL:
                 t.set(sym, value)
-                break
+                return rpn.EL
             e = e.parent()
         raise NameError(str(sym))  ## XXX assumption that str(sym) works
-        return rpn.EL
 
 
 ## }}}
@@ -559,7 +564,7 @@ class Globals:
             arg, args = self.rpn.car(args), self.rpn.cdr(args)
         else:
             arg, args = args, self.rpn.EL
-            self.stack.push(".")  ## XXX parser needs to allow this for input!
+            self.stack.push(Frame(frame, x="."))  ## XXX parser needs to allow this for input!
         self.stack.push(frame, x=args)
         return bounce(
             self.stringify_, self, Frame(frame, x=arg, c=self.stringify_cont)
@@ -588,9 +593,9 @@ class Globals:
         assert g is self
         rpn = g.rpn
         x = frame.x
-        if x is rpn.T:
+        if rpn.is_true(x):
             return bounce(frame.c, g, "#t")
-        if x is rpn.EL:
+        if rpn.is_empty_list(x):
             return bounce(frame.c, g, "()")
         if rpn.is_symbol(x) or rpn.is_number(x):
             return bounce(frame.c, g, str(x))
@@ -691,7 +696,7 @@ class Globals:
         else:
             sym, args = rpn.car(x), rpn.cdr(x)
         if rpn.is_symbol(sym):
-            op = self.senv.get(sym)
+            op = frame.s.get(sym)
             if op is not SENTINEL:
                 return bounce(op, self, Frame(frame, x=args))
         elif callable(sym):
@@ -740,11 +745,11 @@ class Lambda:
 
     def __call__(self, g, frame):
         args = frame.x
-        parent = (
-            frame.e if self.special else self.genv()
-        )  ## specials are weird
-        e = Environment(g, self.params(), args, parent)
-        s = Environment(g, g.rpn.EL, g.rpn.EL, frame.s)
+        ## XXX parent for senv? frame.s if special?
+        gp = frame.e if self.special else self.genv()
+        sp = frame.s if self.special else self.senv()
+        e = Environment(g, self.params(), args, gp)
+        s = Environment(g, g.rpn.EL, g.rpn.EL, sp)
         return bounce(g.eval_, g, Frame(frame, x=self.body(), e=e, s=s))
 
     ###
@@ -759,7 +764,7 @@ class Lambda:
         ## pylint: disable=no-self-use
         frame = g.stack.pop()
         body = frame.x
-        g.state.push(frame, x=paramstr)
+        g.stack.push(frame, x=paramstr)
         return bounce(
             g.stringify_, g, Frame(frame, x=body, c=self.lambda_body_done)
         )
@@ -778,7 +783,7 @@ def is_lambda(x):
 
 
 ## }}}
-## {{{ continuations
+## {{{ continuation
 
 
 class Continuation:
@@ -1001,15 +1006,15 @@ class BaseOperators(Operators):
         form = frame.x
         app = rpn.car(form)
 
-        if app is g.symbol("quasiquote"):
+        if rpn.eq(app, g.symbol("quasiquote")):
             _, x = g.unpack(form, 2)
             return bounce(self.qq, g, Frame(frame, x=x))
 
-        if app is g.symbol("unquote"):
+        if rpn.eq(app, g.symbol("unquote")):
             _, x = g.unpack(form, 2)
             return bounce(g.eval_, g, Frame(frame, x=x))
 
-        if app is g.symbol("unquote-splicing"):
+        if rpn.eq(app, g.symbol("unquote-splicing")):
             _, x = g.unpack(form, 2)
             raise LispError("cannot use unquote-splicing here")
 
@@ -1061,6 +1066,9 @@ class BaseOperators(Operators):
         ## pylint: disable=no-self-use
         frame = g.stack.pop()
         sym = frame.x
+        if not isinstance(value, Lambda):
+            raise TypeError(f"expected lambda, got {value!r}")
+        value.set_special()
         frame.s.set(sym, value)
         return bounce(frame.c, g, g.rpn.EL)
 
@@ -1199,10 +1207,10 @@ class BaseOperators(Operators):
         e = frame.e
         s = frame.s
         for _ in range(n_up):
-            e = e.parent()
-            s = s.parent()
             if rpn.is_empty_list(e) or rpn.is_empty_list(s):
                 raise ValueError(f"cannot go up {n_up} levels")
+            e = e.parent()
+            s = s.parent()
         return bounce(g.eval_, g, Frame(frame, x=x, e=e, s=s))
 
     ###

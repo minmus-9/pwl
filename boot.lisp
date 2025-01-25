@@ -4,6 +4,10 @@
 (define unquote (lambda (x) (error "cannot unquote here")))
 (define unquote-splicing (lambda (x) (error "cannot unquote-splicing here")))
 
+(define null? (lambda (x) (if (eq? x ()) #t ())))
+
+(define cadr (lambda (x) (car (cdr x))))
+
 (special begin$2 (lambda (__special_begin$2_a__ __special_begin$2_b__)
      (if
         (eval __special_begin$2_a__ 1)
@@ -14,10 +18,6 @@
 
 (special do (lambda (& __special_do_args__)
     (eval (do$ __special_do_args__) 1)))
-
-(define null? (lambda (x) (if (eq? x ()) #t ())))
-
-(define cadr (lambda (x) (car (cdr x))))
 
 (define do$ (lambda (__special_do$_args__)
     (if
@@ -49,11 +49,13 @@
 
 (define z (lambda (x)
     (cond
-        ((eq? () x) (print 'nil))
-        ((eq? (type x) 'list) (print 'list))
+        ((null? x) (print 'nil))
+        ((eq? (type x) 'pair) (print 'pair))
         (#t (print 'thang))
     )
 ))
+
 (z ())
 (z 1)
 (z '(1))
+
