@@ -5,7 +5,9 @@
 ## pylint: disable=invalid-name,too-many-lines
 ## XXX pylint: disable=missing-docstring
 
+import os
 import sys
+import traceback
 
 
 SENTINEL = object()
@@ -538,16 +540,16 @@ class Globals:
         s = self.senv if senv is SENTINEL else senv
         return trampoline(
             self.stringify_, self, Frame(x=sexpr, e=e, s=s, c=land)
-        )
+        )[1]
 
     def stringify_setup(self, g, frame, args):
         assert g is self
         if self.rpn.is_pair(args):
-            arg, args = self.car(args), self.cdr(args)
+            arg, args = self.rpn.car(args), self.rpn.cdr(args)
         else:
             arg, args = args, self.rpn.EL
             self.stack.push(".")  ## XXX parser needs to allow this for input!
-        self.stack.fpush(frame, x=args)
+        self.stack.push(frame, x=args)
         return bounce(
             self.stringify_, self, Frame(frame, x=arg, c=self.stringify_cont)
         )
@@ -555,19 +557,19 @@ class Globals:
     def stringify_cont(self, g, value):
         assert g is self
         rpn = self.rpn
-        frame = self.stack.fpop()
+        frame = self.stack.pop()
         args = frame.x
 
         if rpn.is_empty_list(args):
             parts = [value]
             while True:
-                f = self.stack.fpop()
+                f = self.stack.pop()
                 if f.x is SENTINEL:
                     break
                 parts.insert(0, f.x)
             return bounce(frame.c, self, "(" + " ".join(parts) + ")")
 
-        self.stack.fpush(frame, x=value)
+        self.stack.push(frame, x=value)
         return self.stringify_setup(g, frame, args)
 
     def stringify_(self, g, frame):
@@ -594,7 +596,7 @@ class Globals:
         if not rpn.is_pair(x):
             return bounce(frame.c, g, "[opaque]")
 
-        g.stack.fpush(frame, x=SENTINEL)
+        g.stack.push(frame, x=SENTINEL)
 
         return self.stringify_setup(g, frame, x)
 
@@ -604,7 +606,9 @@ class Globals:
     def eval(self, sexpr, genv=SENTINEL, senv=SENTINEL):
         e = self.genv if genv is SENTINEL else genv
         s = self.senv if senv is SENTINEL else senv
-        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, s=s, c=land))
+        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, s=s, c=land))[
+            1
+        ]
 
     def eval_setup(self, frame, args):
         rpn = self.rpn
@@ -612,28 +616,29 @@ class Globals:
             arg, args = rpn.car(args), rpn.cdr(args)
         else:
             arg, args = args, rpn.EL
-        self.stack.fpush(frame, x=args)
-        return bounce(self.eval_, self, Frame(frame, x=arg, c=self.eval_next_arg))
+        self.stack.push(frame, x=args)
+        return bounce(
+            self.eval_, self, Frame(frame, x=arg, c=self.eval_next_arg)
+        )
 
     def eval_next_arg(self, g, value):
         assert g is self
         rpn = self.rpn
-        frame = self.stack.fpop()
+        frame = self.stack.pop()
         args = frame.x
 
         if rpn.is_empty_list(args):
             ret = rpn.cons(value, rpn.EL)
             while True:
-                f = self.stack.fpop()
+                f = self.stack.pop()
                 if f.x is SENTINEL:
                     proc = f.proc
                     break
                 ret = rpn.cons(f.x, ret)
             return bounce(proc, g, Frame(frame, x=ret))
 
-        self.stack.fpush(frame, x=value)
+        self.stack.push(frame, x=value)
         return self.eval_setup(frame, args)
-
 
     def eval_proc_done(self, g, proc):
         assert g is self
@@ -648,10 +653,9 @@ class Globals:
         if self.rpn.is_empty_list(args):
             return bounce(proc, self, frame)
 
-        self.stack.fpush(frame, proc=proc, x=SENTINEL)
+        self.stack.push(frame, proc=proc, x=SENTINEL)
 
         return self.eval_setup(frame, args)
-
 
     def eval_(self, g, frame):
         assert g is self
@@ -672,7 +676,7 @@ class Globals:
             else:
                 return bounce(frame.c, self, x)
         elif not rpn.is_pair(x):
-            raise RuntimeError("unexpected object type {x!r}")
+            raise RuntimeError(f"unexpected object type {x!r}")
         else:
             sym, args = rpn.car(x), rpn.cdr(x)
         if rpn.is_symbol(sym):
@@ -681,13 +685,15 @@ class Globals:
                 return bounce(op, self, Frame(frame, x=args))
         elif callable(sym):
             ## primitive Lambda Continuation
-            self.stack.fpush(frame, proc=sym, x=args)
+            self.stack.push(frame, proc=sym, x=args)
             return self.eval_proc_done(self, sym)
         elif not rpn.is_pair(sym):
-            raise TypeError("expected proc or list, got {sym!r}")
+            raise TypeError(f"expected proc or list, got {sym!r}")
 
-        self.stack.fpush(frame, x=args)
-        return bounce(self.eval_, self, Frame(frame, x=sym, c=self.eval_proc_done))
+        self.stack.push(frame, x=args)
+        return bounce(
+            self.eval_, self, Frame(frame, x=sym, c=self.eval_proc_done)
+        )
 
     ## }}}
 
@@ -734,21 +740,21 @@ class Lambda:
 
     def lambda_body_done(self, g, bodystr):
         ## pylint: disable=no-self-use
-        frame = g.stack.fpop()
+        frame = g.stack.pop()
         paramstr = frame.x
         return bounce(frame.c, g, "(lambda " + paramstr + " " + bodystr + ")")
 
     def lambda_params_done(self, g, paramstr):
         ## pylint: disable=no-self-use
-        frame = g.stack.fpop()
+        frame = g.stack.pop()
         body = frame.x
-        g.state.fpush(frame, x=paramstr)
+        g.state.push(frame, x=paramstr)
         return bounce(
             g.stringify_, g, Frame(frame, x=body, c=self.lambda_body_done)
         )
 
     def stringify_(self, g, frame):
-        g.stack.fpush(frame, x=self.body())
+        g.stack.push(frame, x=self.body())
         return bounce(
             g.stringify_,
             g,
@@ -879,7 +885,7 @@ class BaseOperators(Operators):
         if not g.rpn.is_symbol(sym):
             raise TypeError(f"expected symbol, got {sym!r}")
 
-        g.stack.fpush(frame, x=sym)
+        g.stack.push(frame, x=sym)
         return bounce(g.eval_, g, Frame(frame, x=defn, c=self.op_define_cont))
 
     ###
@@ -894,7 +900,7 @@ class BaseOperators(Operators):
     @spcl("if")
     def op_if(self, g, frame):
         p, c, a = g.unpack(frame.x, 3)
-        g.stack.fpush(frame, x=g.rpn.cons(c, a))
+        g.stack.push(frame, x=g.rpn.cons(c, a))
         return bounce(g.eval_, g, Frame(frame, x=p, c=self.op_if_cont))
 
     ###
@@ -920,7 +926,7 @@ class BaseOperators(Operators):
         elt, form = rpn.car(form), rpn.cdr(form)
         if not (rpn.is_pair(form) or rpn.is_empty_list(form)):
             raise TypeError(f"expected list, got {form!r}")
-        g.stack.fpush(frame, x=form)
+        g.stack.push(frame, x=form)
         return bounce(
             self.qq_list_next, g, Frame(frame, x=elt, c=self.qq_list_cont)
         )
@@ -930,25 +936,25 @@ class BaseOperators(Operators):
         rpn = g.rpn
         res = rpn.EL if value is SENTINEL else rpn.cons(value, rpn.EL)
         while True:
-            f = g.stack.fpop()
+            f = g.stack.pop()
             if f.x is SENTINEL:
                 break
             res = rpn.cons(f.x, res)
         return bounce(frame.c, g, res)
 
     def qq_list_cont(self, g, value):
-        frame = g.stack.fpop()
+        frame = g.stack.pop()
         form = frame.x
 
         if g.rpn.is_empty_list(form):
             return bounce(self.qq_finish, frame, value)
 
-        g.stack.fpush(frame, x=value)
+        g.stack.push(frame, x=value)
 
         return self.qq_list_setup(g, frame, form)
 
     def qq_spliced(self, g, value):
-        frame = g.stack.fpop()
+        frame = g.stack.pop()
         form = frame.x
         rpn = g.rpn
 
@@ -962,9 +968,9 @@ class BaseOperators(Operators):
                 raise TypeError(f"expected list, got {value!r}")
             elt, value = rpn.car(value), rpn.cdr(value)
             if rpn.is_empty_list(value):
-                g.stack.fpush(frame, x=form)
+                g.stack.push(frame, x=form)
                 return bounce(self.qq_list_cont, g, elt)
-            g.stack.fpush(frame, x=elt)
+            g.stack.push(frame, x=elt)
 
         raise RuntimeError("logs in the bedpan")
 
@@ -996,7 +1002,7 @@ class BaseOperators(Operators):
             _, x = g.unpack(form, 2)
             raise LispError("cannot use unquote-splicing here")
 
-        g.stack.fpush(frame, x=SENTINEL)
+        g.stack.push(frame, x=SENTINEL)
 
         return self.qq_list_setup(g, frame, form)
 
@@ -1023,7 +1029,7 @@ class BaseOperators(Operators):
 
     def op_setbang_cont(self, g, defn):
         ## pylint: disable=no-self-use
-        frame = g.stack.fpop()
+        frame = g.stack.pop()
         sym = frame.x
         frame.e.setbang(sym, defn)
         return bounce(frame.c, g, g.rpn.EL)
@@ -1033,7 +1039,7 @@ class BaseOperators(Operators):
         sym, defn = g.unpack(frame.x, 2)
         if not g.rpn.is_symbol(sym):
             raise TypeError(f"expected symbol, got {sym!r}")
-        g.stack.fpush(frame, x=sym)
+        g.stack.push(frame, x=sym)
         return bounce(
             g.eval_, g, Frame(frame, x=defn, c=self.op_setbang_cont)
         )
@@ -1054,7 +1060,7 @@ class BaseOperators(Operators):
         if not g.rpn.is_symbol(sym):
             raise TypeError(f"expected symbol, got {sym!r}")
 
-        g.stack.fpush(frame, x=sym)
+        g.stack.push(frame, x=sym)
         return bounce(
             g.eval_, g, Frame(frame, x=defn, c=self.op_special_cont)
         )
@@ -1250,7 +1256,7 @@ class BaseOperators(Operators):
 
         arg, args = rpn.car(args), rpn.cdr(args)
 
-        g.stack.fpush(frame, x=args)
+        g.stack.push(frame, x=args)
         return bounce(
             g.stringify_, g, Frame(frame, x=arg, c=self.op_print_cont)
         )
@@ -1268,7 +1274,7 @@ class BaseOperators(Operators):
 
         arg, args = rpn.car(args), rpn.cdr(args)
 
-        g.stack.fpush(frame, x=args)
+        g.stack.push(frame, x=args)
         return bounce(
             g.stringify_, g, Frame(frame, x=arg, c=self.op_print_cont)
         )
@@ -1329,20 +1335,305 @@ class BaseOperators(Operators):
 ## {{{ lisp class
 
 
-class Lisp:
-    ...
+class Lisp(Globals):
+    OPERATOR_CLASS = BaseOperators
 
+    def __init__(
+        self,
+        operator_class=None,
+        representation=None,
+        representation_class=None,
+    ):
+        operator_class = operator_class or self.OPERATOR_CLASS
+        super().__init__(operator_class, representation, representation_class)
+
+
+## }}}
+## {{{ scanner and parser
+
+
+class Scanner:
+    T_SYM = "sym"
+    T_INT = "int"
+    T_REAL = "real"
+    T_STR = "string"
+    T_LPAR = "("
+    T_RPAR = ")"
+    T_TICK = "'"
+    T_BACKTICK = "`"
+    T_COMMA = ","
+    T_COMMA_AT = ",@"
+    T_EOF = "eof"
+
+    S_SYM = "sym"  ## building symbol
+    S_CMNT = "comment"  ## comment to eol
+    S_STR = "string"  ## string to "
+    S_BS = "backslash"  ## saw \ inside "
+    S_COMMA = ","  ## saw ,
+
+    ESC = {"t": "\t", "n": "\n", "r": "\r", '"': '"', "\\": "\\"}
+
+    def __init__(self, callback):
+        self.callback = callback
+        self.token = ""
+        self.state = self.S_SYM
+
+    def feed(self, text):
+        ## pylint: disable=too-many-branches,too-many-statements
+        if text is None:
+            self.push(self.T_SYM)
+            self.push(self.T_EOF)
+            return
+        while text:
+            ch, text = text[0], text[1:]
+            if self.state == self.S_CMNT:
+                if ch in "\n\r":
+                    self.state = self.S_SYM
+            elif self.state == self.S_STR:
+                if ch == '"':
+                    self.state = self.S_SYM
+                    self.push(self.T_STR)
+                elif ch == "\\":
+                    self.state = self.S_BS
+                else:
+                    self.token += ch
+            elif self.state == self.S_BS:
+                c = self.ESC.get(ch)
+                if c is None:
+                    raise SyntaxError("bad escape {ch!r}")
+                self.token += c
+                self.state = self.S_STR
+            elif self.state == self.S_COMMA:
+                if ch == "@":
+                    self.push(self.T_COMMA_AT)
+                else:
+                    self.push(self.T_COMMA)
+                    text = ch + text
+                self.state = self.S_SYM
+            elif ch in " \n\t\r":
+                self.push(self.T_SYM)
+            elif ch == ";":
+                self.state = self.S_CMNT
+            elif ch == "'":
+                if self.token:
+                    raise SyntaxError("tick is not a delimiter")
+                self.push(self.T_SYM)
+                self.push(self.T_TICK)
+            elif ch == "`":
+                if self.token:
+                    raise SyntaxError("backtick is not a delimiter")
+                self.push(self.T_SYM)
+                self.push(self.T_BACKTICK)
+            elif ch == ",":
+                if self.token:
+                    raise SyntaxError("comma is not a delimiter")
+                self.state = self.S_COMMA
+            elif ch == '"':
+                if self.token:
+                    raise SyntaxError("quote is not a delimiter")
+                self.state = self.S_STR
+            elif ch == "(":
+                self.push(self.T_SYM)
+                self.push(self.T_LPAR)
+            elif ch == ")":
+                self.push(self.T_SYM)
+                self.push(self.T_RPAR)
+            else:
+                self.token += ch
+
+    def push(self, ttype):
+        t, self.token = self.token, ""
+        if ttype == self.T_SYM:
+            if not t:
+                return
+            try:
+                t = int(t, 0)
+                ttype = self.T_INT
+            except ValueError:
+                try:
+                    t = float(t)
+                    ttype = self.T_REAL
+                except:  ## pylint: disable=bare-except
+                    pass  ## value error, range error
+        self.callback(ttype, t)
+
+
+class Parser:
+    def __init__(self, g, callback):
+        self.g, self.callback = g, callback
+        self.stack = g.rpn.make_stack()
+        self.scanner = Scanner(self.process_token)
+        self.feed = self.scanner.feed
+        self.q_map = {  ## could if-away these special cases but just use dict
+            g.symbol("'"): g.symbol("quote"),
+            g.symbol("`"): g.symbol("quasiquote"),
+            g.symbol(","): g.symbol("unquote"),
+            g.symbol(",@"): g.symbol("unquote-splicing"),
+        }
+
+    def process_token(self, ttype, token):
+        ## pylint: disable=too-many-branches
+        ## ugly, but the most brevity
+        if ttype == self.scanner.T_SYM:
+            self.add(self.g.symbol(token))
+        elif ttype == self.scanner.T_LPAR:
+            self.stack.push(self.g.rpn.make_queue)
+        elif ttype == self.scanner.T_RPAR:
+            if not self.stack:
+                raise SyntaxError("too many ')'s")
+            l = self.filter(self.stack.pop().get_data_structure())
+            if self.stack:
+                self.add(l)
+            else:
+                self.callback(l)
+        elif ttype in (
+            self.scanner.T_INT,
+            self.scanner.T_REAL,
+            self.scanner.T_STR,
+        ):
+            self.add(token)
+        elif ttype == self.scanner.T_TICK:
+            self.add(self.g.symbol("'"))
+        elif ttype == self.scanner.T_BACKTICK:
+            self.add(self.g.symbol("`"))
+        elif ttype == self.scanner.T_COMMA:
+            self.add(self.g.symbol(","))
+        elif ttype == self.scanner.T_COMMA_AT:
+            self.add(self.g.symbol(",@"))
+        elif ttype == self.scanner.T_EOF:
+            if self.stack:
+                raise SyntaxError("premature eof in '('")
+        else:
+            raise RuntimeError((ttype, token))
+
+    def add(self, x):
+        if not self.stack:
+            raise SyntaxError(f"expected '(' got {x!r}")
+        self.stack.top().enqueue(x)
+
+    def filter(self, sexpr):
+        ## pylint: disable=no-self-use
+        "process ' ` , ,@"
+        rpn = self.g.rpn
+        q = rpn.make_queue()
+
+        ## NB we know this is a well-formed list
+        while not rpn.is_empty_list(sexpr):
+            elt, sexpr = rpn.car(sexpr), rpn.cdr(sexpr)
+            if rpn.is_symbol(elt) and elt in self.q_map:
+                elt, sexpr = self.process_syms(elt, sexpr)
+            q.enqueue(elt)
+        return q.get_data_structure()
+
+    def process_syms(self, elt, sexpr):
+        rpn = self.g.rpn
+        replacement = self.q_map[elt]
+        if rpn.is_empty_list(sexpr):
+            raise SyntaxError(f"got {elt!r} at end of list")
+        quoted, sexpr = rpn.car(sexpr), rpn.cdr(sexpr)
+        if rpn.is_symbol(quoted) and quoted in self.q_map:
+            ## XXX this is recursive but likely ok. no, fix. it. fix it.
+            quoted, sexpr = self.process_syms(quoted, sexpr)
+        elt = rpn.cons(replacement, rpn.cons(quoted, rpn.EL))
+        return elt, sexpr
+
+
+## }}}
+## {{{ main repl
+
+
+def repl(g, callback):
+    try:
+        import readline as _  ## pylint: disable=import-outside-toplevel
+    except ImportError:
+        pass
+
+    ## pylint: disable=unused-variable
+    p, rc, stop = Parser(g, callback), 0, False
+
+    def feed(x):
+        nonlocal p, rc, stop
+        try:
+            p.feed(x)
+        except SystemExit as exc:
+            stop, rc = True, exc.args[0]
+        except SyntaxError:
+            ## have to reset scanner/parser state and stack
+            p = Parser(g, callback)
+            g.stack.clear()
+            traceback.print_exception(*sys.exc_info())
+        except:  ## pylint: disable=bare-except
+            ## reset stack because we have no clue what just happened
+            g.stack.clear()
+            traceback.print_exception(*sys.exc_info())
+
+    while not stop:
+        try:
+            line = input("lisp> ") + "\n"
+        except (EOFError, KeyboardInterrupt):
+            feed(None)
+            break
+        feed(line)
+    print("\nbye")
+    return rc
+
+
+def main(force_repl=False, lisp=None, lisp_class=Lisp):
+    g = lisp or lisp_class()
+
+    def callback(sexpr):
+        try:
+            value = g.eval(sexpr)
+        except:
+            print("Offender (pyth):", sexpr)
+            print("Offender (lisp):", g.stringify(sexpr), "\n")
+            raise
+        if not g.rpn.is_empty_list(value):
+            print(g.stringify(value))
+
+    def eat(src):
+        p = Parser(g, callback)
+        p.feed(src)
+        p.feed(None)
+
+    def load(filename):
+        for base in [os.getcwd(), os.path.dirname(__file__)] + sys.path:
+            path = os.path.join(base, filename)
+            if os.path.exists(path):
+                filename = path
+                break
+        else:
+            raise RuntimeError(f"cannot find {filename}")
+        with open(  ## pylint: disable=unspecified-encoding
+            filename, "r"
+        ) as fp:
+            eat(fp.read())
+
+    stop = True
+    for filename in sys.argv[1:]:
+        if filename == "+":
+            try:
+                sys.set_int_max_str_digits(0)
+            except AttributeError:
+                pass
+            continue
+        if filename == "-":
+            stop = False
+            break
+        load(filename)
+        stop = True
+    if force_repl or not stop:
+        try:
+            raise SystemExit(repl(g, callback))
+        finally:
+            if not g.rpn.is_empty_list(g.stack):
+                print("STACK", g.stack)
 
 ## }}}
 
 
-def test():
-    g = Globals(BaseOperators)
-    assert g.rpn.eq(g.symbol("a"), g.symbol("ab"[0]))
-
-
 if __name__ == "__main__":
-    test()
+    main()
 
 
 ## EOF
