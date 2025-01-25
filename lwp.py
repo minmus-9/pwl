@@ -5,6 +5,8 @@
 ## pylint: disable=invalid-name,too-many-lines
 ## XXX pylint: disable=missing-docstring
 
+## XXX import FFI
+
 import os
 import sys
 import traceback
@@ -197,6 +199,12 @@ class Stack:
         self.stack = stack
 
     ###
+
+    def clear(self):
+        self.stack = self.rpn.EL
+
+    def is_empty(self):
+        return self.rpn.is_empty_list(self.stack)
 
     def pop(self):
         if self.rpn.is_empty_list(self.stack):
@@ -400,7 +408,7 @@ class Environment:
             p, params = rpn.car(params), rpn.cdr(params)
             if not rpn.is_symbol(p):
                 raise TypeError(f"expected symbol, got {p!r}")
-            if rpn.eq(p, rpn.symbol("&")):
+            if rpn.eq(p, self.g.symbol("&")):
                 variadic = True
             elif variadic:
                 if not rpn.is_empty_list(params):
@@ -429,6 +437,7 @@ class Environment:
         return self.stab().delete(sym)
 
     def get(self, sym, default=SENTINEL):
+        ## nasty way to turn recusion into iteration
         rpn = self.g.rpn
         e = self
         while not rpn.is_empty_list(e):
@@ -452,6 +461,7 @@ class Environment:
                 t.set(sym, value)
                 break
             e = e.parent()
+        raise NameError(str(sym))  ## XXX assumption that str(sym) works
         return rpn.EL
 
 
@@ -477,6 +487,7 @@ class Globals:
         self.stack = self.rpn.new_frame_stack()
         self.ops = operator_class(self)
         self.genv, self.senv = self.ops.get_envs()
+        self.genv.set(self.symbol("#t"), self.rpn.T)
 
     ## {{{ global symbol table
 
@@ -662,7 +673,7 @@ class Globals:
         rpn = self.rpn
         x = frame.x
         if rpn.is_symbol(x):
-            obj = self.genv.get(x)
+            obj = frame.e.get(x)
             if obj is SENTINEL:
                 raise NameError(x)
             return bounce(frame.c, self, obj)
@@ -947,7 +958,7 @@ class BaseOperators(Operators):
         form = frame.x
 
         if g.rpn.is_empty_list(form):
-            return bounce(self.qq_finish, frame, value)
+            return bounce(self.qq_finish, g, frame, value)
 
         g.stack.push(frame, x=value)
 
@@ -1461,7 +1472,7 @@ class Scanner:
 class Parser:
     def __init__(self, g, callback):
         self.g, self.callback = g, callback
-        self.stack = g.rpn.make_stack()
+        self.stack = g.rpn.new_stack()
         self.scanner = Scanner(self.process_token)
         self.feed = self.scanner.feed
         self.q_map = {  ## could if-away these special cases but just use dict
@@ -1473,19 +1484,19 @@ class Parser:
 
     def process_token(self, ttype, token):
         ## pylint: disable=too-many-branches
-        ## ugly, but the most brevity
+        ## ugly, but the quickest to write
         if ttype == self.scanner.T_SYM:
             self.add(self.g.symbol(token))
         elif ttype == self.scanner.T_LPAR:
-            self.stack.push(self.g.rpn.make_queue)
+            self.stack.push(self.g.rpn.new_queue())
         elif ttype == self.scanner.T_RPAR:
-            if not self.stack:
+            if self.stack.is_empty():
                 raise SyntaxError("too many ')'s")
-            l = self.filter(self.stack.pop().get_data_structure())
-            if self.stack:
-                self.add(l)
-            else:
+            l = self.filter(self.stack.pop().get_queue())
+            if self.stack.is_empty():
                 self.callback(l)
+            else:
+                self.add(l)
         elif ttype in (
             self.scanner.T_INT,
             self.scanner.T_REAL,
@@ -1501,13 +1512,13 @@ class Parser:
         elif ttype == self.scanner.T_COMMA_AT:
             self.add(self.g.symbol(",@"))
         elif ttype == self.scanner.T_EOF:
-            if self.stack:
+            if not self.stack.is_empty():
                 raise SyntaxError("premature eof in '('")
         else:
             raise RuntimeError((ttype, token))
 
     def add(self, x):
-        if not self.stack:
+        if self.stack.is_empty():
             raise SyntaxError(f"expected '(' got {x!r}")
         self.stack.top().enqueue(x)
 
@@ -1515,7 +1526,7 @@ class Parser:
         ## pylint: disable=no-self-use
         "process ' ` , ,@"
         rpn = self.g.rpn
-        q = rpn.make_queue()
+        q = rpn.new_queue()
 
         ## NB we know this is a well-formed list
         while not rpn.is_empty_list(sexpr):
@@ -1523,7 +1534,7 @@ class Parser:
             if rpn.is_symbol(elt) and elt in self.q_map:
                 elt, sexpr = self.process_syms(elt, sexpr)
             q.enqueue(elt)
-        return q.get_data_structure()
+        return q.get_queue()
 
     def process_syms(self, elt, sexpr):
         rpn = self.g.rpn
@@ -1626,8 +1637,8 @@ def main(force_repl=False, lisp=None, lisp_class=Lisp):
         try:
             raise SystemExit(repl(g, callback))
         finally:
-            if not g.rpn.is_empty_list(g.stack):
-                print("STACK", g.stack)
+            if not g.stack.is_empty():
+                print("STACK", g.stack.get_data_structure())
 
 ## }}}
 

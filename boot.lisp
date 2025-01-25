@@ -15,6 +15,10 @@
 (special do (lambda (& __special_do_args__)
     (eval (do$ __special_do_args__) 1)))
 
+(define null? (lambda (x) (if (eq? x ()) #t ())))
+
+(define cadr (lambda (x) (car (cdr x))))
+
 (define do$ (lambda (__special_do$_args__)
     (if
         (null? __special_do$_args__)
