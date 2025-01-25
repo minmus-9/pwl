@@ -24,6 +24,7 @@
 (define a-plus-abs-b (lambda (a b)
     ((if (lt? b 0) sub add) a b)
 ))
+
 (a-plus-abs-b 1 1)
 (a-plus-abs-b 1 -1)
 
@@ -128,7 +129,7 @@
 ;; the first thing you'll notice about this code is how slow it is. while
 ;; you're waiting, the second thing you'll notice is how slow it is.
 ;(count-change 100)
-(count-change 50)
+(count-change 10)
 
 ;;; summation p.77-78
 (define sum (lambda (term a next b) (

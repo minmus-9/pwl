@@ -1,4 +1,4 @@
-;; stdlib.lisp - small runtime, much of which is from other sources
+;; lwp.lisp - runtime, much of which is from other sources
 ;;
 ;; pwl - python with lisp, a collection of lisp evaluators for Python
 ;;       https://github.com/minmus-9/pwl
@@ -16,6 +16,50 @@
 ;; 
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+(define unquote (lambda (x) (error "cannot unquote here")))
+(define unquote-splicing (lambda (x) (error "cannot unquote-splicing here")))
+
+(define null? (lambda (x) (if (eq? x ()) #t ())))
+
+(special begin$2 (lambda (__special_begin$2_a__ __special_begin$2_b__)
+     (if
+        (eval __special_begin$2_a__ 1)
+        (eval __special_begin$2_b__ 1)
+        (eval __special_begin$2_b__ 1)
+    )
+))
+
+(special do (lambda (& __special_do_args__)
+    (eval (do$ __special_do_args__) 1)))
+
+(define do$ (lambda (__special_do$_args__)
+    (if
+        (null? __special_do$_args__)
+        ()
+        (if
+            (null? (cdr __special_do$_args__))
+            (car __special_do$_args__)
+            `(begin$2
+                ,(car __special_do$_args__)
+                ,(do$ (cdr __special_do$_args__)))
+        )
+    )
+))
+
+(special cond (lambda (& __special_cond_pcs__)
+    (eval (cond$ __special_cond_pcs__) 1)))
+
+(define cond$ (lambda (__special_cond_pcs__)
+    (if
+        (null? __special_cond_pcs__)
+        ()
+        `(if
+            ,(car  (car __special_cond_pcs__))
+            ,(cadr (car __special_cond_pcs__))
+            ,(cond$ (cdr __special_cond_pcs__)))
+    )
+))
 
 ;; define negation and addition first
 (define neg     (lambda (x) (sub 0 x)))
@@ -74,15 +118,6 @@
 
 (define list    (lambda (& args) args))
 
-(define null?   (lambda (x) (cond ((eq? x ()) #t) (#t ()))))
-
-(define list? (lambda (x) (
-    cond
-        ((eq? (type x) (quote list)) #t)
-        ((eq? x ()) #t)
-        (#t ())
-)))
-
 (define bool (lambda (x) (cond (x #t) (#t ()))))
 
 (special and (lambda (& __special_and_args__) (
@@ -135,15 +170,6 @@
 
         (helper l 0)
 )))
-
-(special if (lambda (__special_if_predicate__
-                     __special_if_consequent__
-                     __special_if_alternative__)
-    (cond
-        ((eval __special_if_predicate__) (eval __special_if_consequent__))
-        (#t (eval __special_if_alternative__))
-    )
-))
 
 ;;; definition of let sicp p.87
 (special let (lambda (__special_let_vars__ __special_let_body__) (do

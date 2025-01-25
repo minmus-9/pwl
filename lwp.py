@@ -325,10 +325,12 @@ class KeyedTable:
         while not self.rpn.is_empty_list(node):
             pair = self.rpn.car(node)
             if self.cmp(key, self.rpn.car(pair)):
+                #print("KTH", key, node)
                 return prev, node
             prev = node
             node = self.rpn.cdr(node)
 
+        #print("KTM", key)
         return self.rpn.EL, self.rpn.EL
 
     ###
@@ -389,7 +391,6 @@ class SymbolTable(KeyedTable):
 ## }}}
 ## {{{ environment
 
-
 class Environment:
     def __init__(self, g, params, args, parent):
         assert isinstance(parent, Environment) or g.rpn.is_empty_list(parent)
@@ -402,9 +403,9 @@ class Environment:
         variadic = False
         while not rpn.is_empty_list(params):
             if not rpn.is_pair(params):
-                raise RuntimeError("bad params")
-            if not rpn.is_pair(args):
-                raise RuntimeError("bad args")
+                raise RuntimeError(f"bad params {params!r}")
+            if not (rpn.is_pair(args) or rpn.is_empty_list(args)):
+                raise RuntimeError(f"bad args {args!r}")
             p, params = rpn.car(params), rpn.cdr(params)
             if not rpn.is_symbol(p):
                 raise TypeError(f"expected symbol, got {p!r}")
@@ -491,7 +492,7 @@ class Globals:
         self.stab = self.rpn.new_symbol_table()
         self.stack = self.rpn.new_frame_stack()
         self.ops = operator_class(self)
-        self.genv, self.senv = self.ops.get_envs()
+        self.genv = self.ops.get_env()
         self.genv.set(self.symbol("#t"), self.rpn.T)
 
     ## {{{ global symbol table
@@ -551,11 +552,10 @@ class Globals:
     ## }}}
     ## {{{ stringify
 
-    def stringify(self, sexpr, genv=SENTINEL, senv=SENTINEL):
+    def stringify(self, sexpr, genv=SENTINEL):
         e = self.genv if genv is SENTINEL else genv
-        s = self.senv if senv is SENTINEL else senv
         return trampoline(
-            self.stringify_, self, Frame(x=sexpr, e=e, s=s, c=land)
+            self.stringify_, self, Frame(x=sexpr, e=e, c=land)
         )[1]
 
     def stringify_setup(self, g, frame, args):
@@ -619,10 +619,9 @@ class Globals:
     ## }}}
     ## {{{ eval
 
-    def eval(self, sexpr, genv=SENTINEL, senv=SENTINEL):
+    def eval(self, sexpr, genv=SENTINEL):
         e = self.genv if genv is SENTINEL else genv
-        s = self.senv if senv is SENTINEL else senv
-        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, s=s, c=land))[
+        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, c=land))[
             1
         ]
 
@@ -675,11 +674,13 @@ class Globals:
 
     def eval_(self, g, frame):
         assert g is self
+        #print("\nE_", frame.x)
         rpn = self.rpn
         x = frame.x
         if rpn.is_symbol(x):
             obj = frame.e.get(x)
             if obj is SENTINEL:
+                #print("\nM", self.stringify(frame.e.get_data_structure()))
                 raise NameError(x)
             return bounce(frame.c, self, obj)
         ## NB test is_atom *after* is_symbol
@@ -696,8 +697,8 @@ class Globals:
         else:
             sym, args = rpn.car(x), rpn.cdr(x)
         if rpn.is_symbol(sym):
-            op = frame.s.get(sym)
-            if op is not SENTINEL:
+            op = frame.e.get(sym)
+            if op is not SENTINEL and getattr(op, "special", False):
                 return bounce(op, self, Frame(frame, x=args))
         elif callable(sym):
             ## primitive Lambda Continuation
@@ -721,12 +722,10 @@ class Globals:
 class Lambda:
     special = False
 
-    def __init__(
-        self, g, params, body, genv, senv
-    ):  ## pylint: disable=too-many-arguments
+    def __init__(self, g, params, body, genv):
         self.r = g.rpn
         cons = g.rpn.cons
-        self.info = cons(params, cons(body, cons(genv, cons(senv, g.rpn.EL))))
+        self.info = cons(params, cons(body, cons(genv, g.rpn.EL)))
 
     def params(self):
         return self.r.car(self.info)
@@ -737,20 +736,11 @@ class Lambda:
     def genv(self):
         return self.r.car(self.r.cdr(self.r.cdr(self.info)))
 
-    def senv(self):
-        return self.r.car(self.r.cdr(self.r.cdr(self.r.cdr(self.info))))
-
-    def set_special(self):
-        self.special = True
-
     def __call__(self, g, frame):
         args = frame.x
-        ## XXX parent for senv? frame.s if special?
         gp = frame.e if self.special else self.genv()
-        sp = frame.s if self.special else self.senv()
         e = Environment(g, self.params(), args, gp)
-        s = Environment(g, g.rpn.EL, g.rpn.EL, sp)
-        return bounce(g.eval_, g, Frame(frame, x=self.body(), e=e, s=s))
+        return bounce(g.eval_, g, Frame(frame, x=self.body(), e=e))
 
     ###
 
@@ -809,7 +799,7 @@ def is_continuation(x):
 
 def glbl(name):
     def wrap(func):
-        setattr(func, "lisp_op_type", ("glbl", name))
+        setattr(func, "lisp_op", name)
         return func
 
     return wrap
@@ -817,7 +807,8 @@ def glbl(name):
 
 def spcl(name):
     def wrap(func):
-        setattr(func, "lisp_op_type", ("spcl", name))
+        setattr(func, "lisp_op", name)
+        func.special = True
         return func
 
     return wrap
@@ -832,34 +823,28 @@ class Operators:
     def __init__(self, g):
         self.g = g
         self.GLOBALS = Environment(g, g.rpn.EL, g.rpn.EL, g.rpn.EL)
-        self.SPECIALS = Environment(g, g.rpn.EL, g.rpn.EL, g.rpn.EL)
         for k in self.GLOBAL_ATTRS_:
             value = getattr(self, k, None)
-            if callable(value) and hasattr(value, "lisp_op_type"):
-                sym = g.symbol(value.lisp_op_type[1])
+            if callable(value) and hasattr(value, "lisp_op"):
+                sym = g.symbol(value.lisp_op)
                 self.GLOBALS.set(sym, value)
         for k in self.SPECIAL_ATTRS_:
             value = getattr(self, k, None)
             if callable(value) and hasattr(value, "lisp_op_type"):
                 sym = g.symbol(value.lisp_op_type[1])
-                self.SPECIALS.set(sym, value)
+                self.GLOBALS.set(sym, value)
 
     @classmethod
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
         glbls = {}
-        spcls = {}
-        lut = {"glbl": glbls, "spcl": spcls}
         for attr in dir(cls):
             value = getattr(cls, attr)
-            tag = getattr(value, "lisp_op_type", None)
-            if tag is not None:
-                lut[tag[0]].setdefault(attr)
+            glbls.setdefault(attr)
         cls.GLOBAL_ATTRS_ = glbls
-        cls.SPECIAL_ATTRS_ = spcls
 
-    def get_envs(self):
-        return self.GLOBALS, self.SPECIALS
+    def get_env(self):
+        return self.GLOBALS
 
     ### dynamic op addition
 
@@ -872,7 +857,8 @@ class Operators:
 
     def spcl(self, name):
         def wrap(func):
-            self.SPECIALS.set(self.g.symbol(name), func)
+            func.special = True
+            self.GLOBALS.set(self.g.symbol(name), func)
             return func
 
         return wrap
@@ -929,7 +915,7 @@ class BaseOperators(Operators):
         if not (g.rpn.is_pair(params) or g.rpn.is_empty_list(params)):
             raise TypeError("expected param list, got {params!r}")
 
-        return bounce(frame.c, g, Lambda(g, params, body, frame.e, frame.s))
+        return bounce(frame.c, g, Lambda(g, params, body, frame.e))
 
     ## this follows https://blog.veitheller.de/Lets_Build_a_Quasiquoter.html
     ## (special) doesn't quite get the job done due to the way its env works.
@@ -1068,8 +1054,8 @@ class BaseOperators(Operators):
         sym = frame.x
         if not isinstance(value, Lambda):
             raise TypeError(f"expected lambda, got {value!r}")
-        value.set_special()
-        frame.s.set(sym, value)
+        value.special = True
+        frame.e.set(sym, value)
         return bounce(frame.c, g, g.rpn.EL)
 
     @spcl("special")
@@ -1096,7 +1082,7 @@ class BaseOperators(Operators):
             ## exceptions across the trampoline. there is a chance
             ## of blowing the python stack here if you do a deeply
             ## recursive trap.
-            res = g.eval(x, frame.e, frame.s)
+            res = g.eval(x, frame.e)
         except:  ## pylint: disable=bare-except
             ok = g.rpn.EL
             t, v = sys.exc_info()[:2]
@@ -1205,13 +1191,11 @@ class BaseOperators(Operators):
             p.feed(None)
             x = l[-1] if l else rpn.EL
         e = frame.e
-        s = frame.s
         for _ in range(n_up):
-            if rpn.is_empty_list(e) or rpn.is_empty_list(s):
+            if rpn.is_empty_list(e):
                 raise ValueError(f"cannot go up {n_up} levels")
             e = e.parent()
-            s = s.parent()
-        return bounce(g.eval_, g, Frame(frame, x=x, e=e, s=s))
+        return bounce(g.eval_, g, Frame(frame, x=x, e=e))
 
     ###
 
@@ -1239,7 +1223,7 @@ class BaseOperators(Operators):
 
         return self.binary(g, frame, f)
 
-    @glbl("mul2")
+    @glbl("mul")
     def op_mul2(self, g, frame):
         rpn = g.rpn
 
