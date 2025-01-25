@@ -542,31 +542,37 @@ class Globals:
 
     def stringify_setup(self, g, frame, args):
         assert g is self
-        ## NB we know that args is a pair
-        arg, args = g.car(args), g.cdr(args)
-        g.stack.fpush(frame, x=args)
+        if self.rpn.is_pair(args):
+            arg, args = self.car(args), self.cdr(args)
+        else:
+            arg, args = args, self.rpn.EL
+            self.stack.push(".")  ## XXX parser needs to allow this for input!
+        self.stack.fpush(frame, x=args)
         return bounce(
             self.stringify_, self, Frame(frame, x=arg, c=self.stringify_cont)
         )
 
     def stringify_cont(self, g, value):
-        frame = g.stack.fpop()
+        assert g is self
+        rpn = self.rpn
+        frame = self.stack.fpop()
         args = frame.x
 
-        if g.is_empty_list(args):
+        if rpn.is_empty_list(args):
             parts = [value]
             while True:
-                f = g.stack.fpop()
+                f = self.stack.fpop()
                 if f.x is SENTINEL:
                     break
                 parts.insert(0, f.x)
-            return bounce(frame.c, g, "(" + " ".join(parts) + ")")
+            return bounce(frame.c, self, "(" + " ".join(parts) + ")")
 
-        g.stack.fpush(frame, x=value)
+        self.stack.fpush(frame, x=value)
         return self.stringify_setup(g, frame, args)
 
     def stringify_(self, g, frame):
         ## pylint: disable=too-many-return-statements
+        assert g is self
         rpn = g.rpn
         x = frame.x
         if x is rpn.T:
@@ -599,6 +605,89 @@ class Globals:
         e = self.genv if genv is SENTINEL else genv
         s = self.senv if senv is SENTINEL else senv
         return trampoline(self.eval_, self, Frame(x=sexpr, e=e, s=s, c=land))
+
+    def eval_setup(self, frame, args):
+        rpn = self.rpn
+        if rpn.is_pair(args):
+            arg, args = rpn.car(args), rpn.cdr(args)
+        else:
+            arg, args = args, rpn.EL
+        self.stack.fpush(frame, x=args)
+        return bounce(self.eval_, self, Frame(frame, x=arg, c=self.eval_next_arg))
+
+    def eval_next_arg(self, g, value):
+        assert g is self
+        rpn = self.rpn
+        frame = self.stack.fpop()
+        args = frame.x
+
+        if rpn.is_empty_list(args):
+            ret = rpn.cons(value, rpn.EL)
+            while True:
+                f = self.stack.fpop()
+                if f.x is SENTINEL:
+                    proc = f.proc
+                    break
+                ret = rpn.cons(f.x, ret)
+            return bounce(proc, g, Frame(frame, x=ret))
+
+        self.stack.fpush(frame, x=value)
+        return self.eval_setup(frame, args)
+
+
+    def eval_proc_done(self, g, proc):
+        assert g is self
+        frame = self.stack.pop()
+        args = frame.x
+
+        if not callable(proc):  ## python func Lambda Continuation
+            raise TypeError(f"expected callable, got {proc!r}")
+
+        if getattr(proc, "special", False):
+            return bounce(proc, self, frame)
+        if self.rpn.is_empty_list(args):
+            return bounce(proc, self, frame)
+
+        self.stack.fpush(frame, proc=proc, x=SENTINEL)
+
+        return self.eval_setup(frame, args)
+
+
+    def eval_(self, g, frame):
+        assert g is self
+        rpn = self.rpn
+        x = frame.x
+        if rpn.is_symbol(x):
+            obj = self.genv.get(x)
+            if obj is SENTINEL:
+                raise NameError(x)
+            return bounce(frame.c, self, obj)
+        ## NB test is_atom *after* is_symbol
+        if rpn.is_atom(x) or rpn.is_number(x) or rpn.is_string(x):
+            return bounce(frame.c, self, x)
+        if callable(x):
+            ## primitive Lambda Continuation
+            if is_lambda(x):
+                sym, args = x, rpn.EL
+            else:
+                return bounce(frame.c, self, x)
+        elif not rpn.is_pair(x):
+            raise RuntimeError("unexpected object type {x!r}")
+        else:
+            sym, args = rpn.car(x), rpn.cdr(x)
+        if rpn.is_symbol(sym):
+            op = self.senv.get(sym)
+            if op is not SENTINEL:
+                return bounce(op, self, Frame(frame, x=args))
+        elif callable(sym):
+            ## primitive Lambda Continuation
+            self.stack.fpush(frame, proc=sym, x=args)
+            return self.eval_proc_done(self, sym)
+        elif not rpn.is_pair(sym):
+            raise TypeError("expected proc or list, got {sym!r}")
+
+        self.stack.fpush(frame, x=args)
+        return bounce(self.eval_, self, Frame(frame, x=sym, c=self.eval_proc_done))
 
     ## }}}
 
