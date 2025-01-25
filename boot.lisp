@@ -1,6 +1,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
+(define unquote (lambda (x) (error "cannot unquote here")))
+(define unquote-splicing (lambda (x) (error "cannot unquote-splicing here")))
+
 (special begin$2 (lambda (__special_begin$2_a__ __special_begin$2_b__)
      (if
         (eval __special_begin$2_a__ 1)

@@ -531,14 +531,6 @@ class Globals:
         return self.ops.spcl(name)
 
     ## }}}
-    ## {{{ eval
-
-    def eval(self, sexpr, genv=SENTINEL, senv=SENTINEL):
-        e = self.genv if genv is SENTINEL else genv
-        s = self.senv if senv is SENTINEL else senv
-        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, s=s, c=land))
-
-    ## }}}
     ## {{{ stringify
 
     def stringify(self, sexpr, genv=SENTINEL, senv=SENTINEL):
@@ -547,6 +539,66 @@ class Globals:
         return trampoline(
             self.stringify_, self, Frame(x=sexpr, e=e, s=s, c=land)
         )
+
+    def stringify_setup(self, g, frame, args):
+        assert g is self
+        ## NB we know that args is a pair
+        arg, args = g.car(args), g.cdr(args)
+        g.stack.fpush(frame, x=args)
+        return bounce(
+            self.stringify_, self, Frame(frame, x=arg, c=self.stringify_cont)
+        )
+
+    def stringify_cont(self, g, value):
+        frame = g.stack.fpop()
+        args = frame.x
+
+        if g.is_empty_list(args):
+            parts = [value]
+            while True:
+                f = g.stack.fpop()
+                if f.x is SENTINEL:
+                    break
+                parts.insert(0, f.x)
+            return bounce(frame.c, g, "(" + " ".join(parts) + ")")
+
+        g.stack.fpush(frame, x=value)
+        return self.stringify_setup(g, frame, args)
+
+    def stringify_(self, g, frame):
+        ## pylint: disable=too-many-return-statements
+        rpn = g.rpn
+        x = frame.x
+        if x is rpn.T:
+            return bounce(frame.c, g, "#t")
+        if x is rpn.EL:
+            return bounce(frame.c, g, "()")
+        if rpn.is_symbol(x) or rpn.is_number(x):
+            return bounce(frame.c, g, str(x))
+        if rpn.is_string(x):
+            return bounce(
+                frame.c, g, '"' + repr(x)[1:-1].replace('"', '\\"') + '"'
+            )
+        if is_lambda(x):
+            return bounce(x.stringify_, g, frame)
+        if is_continuation(x):
+            return bounce(frame.c, g, "[continuation]")
+        if callable(x):
+            return bounce(frame.c, g, "[primitive]")
+        if not rpn.is_pair(x):
+            return bounce(frame.c, g, "[opaque]")
+
+        g.stack.fpush(frame, x=SENTINEL)
+
+        return self.stringify_setup(g, frame, x)
+
+    ## }}}
+    ## {{{ eval
+
+    def eval(self, sexpr, genv=SENTINEL, senv=SENTINEL):
+        e = self.genv if genv is SENTINEL else genv
+        s = self.senv if senv is SENTINEL else senv
+        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, s=s, c=land))
 
     ## }}}
 
@@ -606,7 +658,7 @@ class Lambda:
             g.stringify_, g, Frame(frame, x=body, c=self.lambda_body_done)
         )
 
-    def stringify(self, g, frame):
+    def stringify_(self, g, frame):
         g.stack.fpush(frame, x=self.body())
         return bounce(
             g.stringify_,
@@ -1098,12 +1150,88 @@ class BaseOperators(Operators):
     ###
 
     def op_print_cont(self, g, value):
-        ...
+        rpn = g.rpn
+        frame = g.stack.pop()
+        args = frame.x
+
+        if rpn.is_empty_list(args):
+            print(value)
+            return bounce(frame.c, g, rpn.EL)
+        print(value, end=" ")
+
+        arg, args = rpn.car(args), rpn.cdr(args)
+
+        g.stack.fpush(frame, x=args)
+        return bounce(
+            g.stringify_, g, Frame(frame, x=arg, c=self.op_print_cont)
+        )
 
     @glbl("print")
     def op_print(self, g, frame):
-        pass
+        rpn = g.rpn
+        args = frame.x
 
+        ## NB we know args is a well-formed list because eval() created it
+
+        if rpn.is_empty_list(args):
+            print()
+            return bounce(frame.c, g, rpn.EL)
+
+        arg, args = rpn.car(args), rpn.cdr(args)
+
+        g.stack.fpush(frame, x=args)
+        return bounce(
+            g.stringify_, g, Frame(frame, x=arg, c=self.op_print_cont)
+        )
+
+    ###
+
+    @glbl("set-car!")
+    def op_setcarbang(self, g, frame):
+        rpn = g.rpn
+
+        def f(x, y):
+            return rpn.setcarbang(x, y)
+
+        return self.binary(g, frame, f)
+
+    @glbl("set-cdr!")
+    def op_setcdrbang(self, g, frame):
+        rpn = g.rpn
+
+        def f(x, y):
+            return rpn.setcdrbang(x, y)
+
+        return self.binary(g, frame, f)
+
+    @glbl("sub")
+    def op_sub(self, g, frame):
+        rpn = g.rpn
+
+        def f(x, y):
+            if not (rpn.is_number(x) and rpn.is_number(y)):
+                raise TypeError(f"expected numbers, got {x!r} and {y!r}")
+            return x - y  ## XXX implicit conversion from python to lisp
+
+        return self.binary(g, frame, f)
+
+    ## XXX for type converison >symbol etc we need to extend Representation
+
+    @glbl("type")
+    def op_type(self, g, frame):
+        def f(x):
+            t = g.type(x)
+            if t is not SENTINEL:
+                return t
+            if isinstance(x, Lambda):
+                return g.symbol("lambda")
+            if isinstance(x, Continuation):
+                return g.symbol("continuation")
+            if callable(x):
+                return g.symbol("primitive")
+            return g.symbol("opaque")
+
+        return self.unary(g, frame, f)
 
     ## }}}
 
