@@ -21,7 +21,7 @@
 ;; this file is just for fiddling around
 
 ;; for lwp.py
-;(define list? (lambda (x) (pair? x)))
+(define list? (lambda (x) (pair? x)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; playing with quasiquote impl

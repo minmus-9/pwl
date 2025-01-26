@@ -518,6 +518,7 @@ class Globals:
         self.ops = operator_class(self)
         self.genv = self.ops.get_env()
         self.genv.set(self.symbol("#t"), self.rpn.T)
+        self.fenv = self.ops.get_ffi()
 
     ## {{{ global symbol table
 
@@ -566,6 +567,9 @@ class Globals:
 
     ## }}}
     ## {{{ decorators for dynamic addition of ops
+
+    def ffi(self, name):
+        return self.ops.ffi(name)
 
     def glbl(self, name):
         return self.ops.glbl(name)
@@ -676,7 +680,10 @@ class Globals:
                     proc = f.proc
                     break
                 ret = rpn.cons(f.x, ret)
-            return bounce(proc, g, Frame(frame, x=ret))
+            ## at this point, need to see if proc is ffi
+            if getattr(proc, "ffi", False):
+                return bounce(self.do_ffi, self, Frame(x=ret, proc=proc))
+            return bounce(proc, self, Frame(frame, x=ret))
 
         self.stack.push(frame, x=value)
         return self.eval_setup(frame, args)
@@ -689,10 +696,15 @@ class Globals:
         if not callable(proc):  ## python func Lambda Continuation
             raise TypeError(f"expected callable, got {proc!r}")
 
+        ## specials don't have their args evaluated
         if getattr(proc, "special", False):
             return bounce(proc, self, frame)
+
+        ## shortcut the no-args case
         if self.rpn.is_empty_list(args):
             return bounce(proc, self, frame)
+
+        ## evaluate args...
 
         self.stack.push(frame, proc=proc, x=SENTINEL)
 
@@ -735,6 +747,13 @@ class Globals:
         return bounce(
             self.eval_, self, Frame(frame, x=sym, c=self.eval_proc_done)
         )
+
+    ## }}}
+    ## {{{ ffi
+
+    def do_ffi(self, g, frame):
+        assert g is self
+        ...
 
     ## }}}
 
@@ -838,35 +857,66 @@ def spcl(name):
     return wrap
 
 
+def ffi(name):
+    def wrap(func):
+        setattr(func, "lisp_op", name)
+        func.ffi = True
+        return func
+
+    return wrap
+
+
 class Operators:
     ## this is a c struct
 
     ## pylint bait
     GLOBAL_ATTRS_ = {}
+    FFI_ATTRS_ = {}
 
     def __init__(self, g):
         self.g = g
-        self.GLOBALS = Environment(g, g.rpn.EL, g.rpn.EL, g.rpn.EL)
+        self.FFI = Environment(g, g.rpn.EL, g.rpn.EL, g.rpn.EL)
+        self.GLOBALS = Environment(g, g.rpn.EL, g.rpn.EL, self.FFI)
         for k in self.GLOBAL_ATTRS_:
             value = getattr(self, k, None)
             if callable(value) and hasattr(value, "lisp_op"):
                 sym = g.symbol(value.lisp_op)
                 self.GLOBALS.set(sym, value)
+        for k in self.FFI_ATTRS_:
+            value = getattr(self, k, None)
+            if callable(value) and hasattr(value, "lisp_op"):
+                sym = g.symbol(value.lisp_op)
+                self.FFI.set(sym, value)
 
     @classmethod
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
         glbls = {}
+        ffis = {}
         for attr in dir(cls):
             value = getattr(cls, attr)
             if hasattr(value, "lisp_op"):
-                glbls.setdefault(attr)
+                if getattr(value, "ffi", False):
+                    ffis.setdefault(attr)
+                else:
+                    glbls.setdefault(attr)
         cls.GLOBAL_ATTRS_ = glbls
+        cls.FFI_ATTRS_ = ffis
 
     def get_env(self):
         return self.GLOBALS
 
+    def get_ffi(self):
+        return self.FFI
+
     ### dynamic op addition
+
+    def ffi(self, name):
+        def wrap(func):
+            self.FFI.set(self.g.symbol(name), func)
+            return func
+
+        return wrap
 
     def glbl(self, name):
         def wrap(func):
