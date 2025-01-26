@@ -160,6 +160,19 @@ class Representation:
         return self.is_integer(x) or self.is_float(x)
 
     ## }}}
+    ## {{{ py<->lisp conversions
+
+    def string2str(self, x):
+        if not self.is_string(x):
+            raise TypeError(f"expected string, got {x!r}")
+        return x
+
+    def sym2str(self, x):
+        if not self.is_symbol(x):
+            raise TypeError(f"expected symbol, got {x!r}")
+        return str(x)
+
+    ## }}}
     ## {{{ factories
 
     def new_frame_stack(self):
@@ -490,7 +503,7 @@ class Environment:
                 t.set(sym, value)
                 return rpn.EL
             e = e.parent()
-        raise NameError(str(sym))  ## XXX assumption that str(sym) works
+        raise NameError(rpn.sym2str(sym))
 
 
 ## }}}
@@ -806,7 +819,7 @@ class Globals:
             x = None
         elif rpn.is_true(x):
             x = True
-        if not isinstance(x, g.rpn.Pair):
+        if not g.rpn.is_pair(x):
             return bounce(frame.c, g, x)
 
         g.stack.push(frame, x=SENTINEL)
@@ -1383,7 +1396,7 @@ class LispOperators(Operators):
         if rpn.is_string(x):
             l = []
             p = Parser(g, l.append)
-            p.feed(str(x))  ## XXX implicit conversion from lisp -> str
+            p.feed(rpn.string2str(x))
             p.feed(None)
             x = l[-1] if l else rpn.EL
         e = frame.e
@@ -1537,7 +1550,7 @@ class LispOperators(Operators):
         sym = args.pop(0)
         if not g.rpn.is_symbol(sym):
             raise TypeError(f"expected symbol, got {sym!r}")
-        func = getattr(module, str(sym), None)  ## XXX sym stringification
+        func = getattr(module, g.rpn.sym2str(sym), None)
         if func is None:
             raise ValueError(f"function {sym!r} does not exist")
         return func(*args)
@@ -1694,14 +1707,16 @@ class Lisp(Globals):
         super().__init__(operator_class, representation, representation_class)
 
     def call(self, obj, *args):
-        if self.rpn.is_string(obj):
-            obj = self.symbol(obj)  ## XXX implicit str assumption
+        if not self.rpn.is_symbol(obj):
+            obj = self.symbol(obj)
         sexpr = self.py_value_to_lisp_value([obj] + list(args))
         return self.lisp_value_to_py_value(self.eval(sexpr))
 
     def define(self, name, value, env=None):
+        if not self.rpn.is_symbol(name):
+            name = self.symbol(name)
         env = self.genv if env is None else env
-        env.set(self.symbol(str(name)), value)  ## implicit str assumption
+        env.set(name, value)
 
     def execute(self, text):
         results = []
@@ -1713,7 +1728,8 @@ class Lisp(Globals):
         return results
 
     def lookup(self, name, env=None):
-        name = self.symbol(str(name))  ## implicit str assumption
+        if not self.rpn.is_symbol(name):
+            name = self.symbol(name)
         env = self.genv if env is None else env
         ret = env.get(name)
         return None if ret is SENTINEL else ret
@@ -1828,8 +1844,9 @@ class Scanner:
                     raise SyntaxError(f"too many {ch!r}")
                 c = self.stack.pop()
                 if not self.g.rpn.eq(c, self.g.symbol(ch)):
-                    ## XXX stringify symbol
-                    raise SyntaxError(f"expected {str(c)!r}, got {ch!r}")
+                    raise SyntaxError(
+                        f"expected {self.g.rpn.sym2str(c)!r}, got {ch!r}"
+                    )
                 self.push(self.T_SYM)
                 self.push(self.T_RPAR)
             else:

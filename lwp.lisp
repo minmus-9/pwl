@@ -650,13 +650,5 @@
     )
 )))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; misc
-
-(define r (range 500))
-(define t (time 'time))
-(reverse r)
-(define dt (sub (time 'time) t))
-(print dt)
 
 ;; EOF
