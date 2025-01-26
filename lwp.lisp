@@ -1,4 +1,4 @@
-;; lwp.lisp - runtime, much of which is from other sources
+;; lwp.lisp - runtime, lots of which is from other sources
 ;;
 ;; pwl - python with lisp, a collection of lisp evaluators for Python
 ;;       https://github.com/minmus-9/pwl
@@ -24,6 +24,11 @@
 ;; used everywhere
 (define null? (lambda (x) (if (eq? x ()) #t ())))
 (define pair? (lambda (x) (if (eq? (type x) 'pair) #t ())))
+
+;; ditto
+(define cadr (lambda (l) (car (cdr l))))
+(define caddr (lambda (l) (car (cdr (cdr l)))))
+(define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
 
 ;; define do
 (special begin$2 (lambda (__special_begin$2_a__ __special_begin$2_b__)
@@ -90,7 +95,7 @@
         (#t         x)
 )))
 
-;; this is redefined in the math ffi interface... for pylisp.py
+;; copysign
 (define copysign (lambda (x y) (
     cond
         ((lt? y 0) (neg (abs x)))
@@ -224,14 +229,6 @@
         (#t (copysign (umul x (abs y) 0) y))
     )
 )))
-
-(define first car)
-(define cadr (lambda (l) (car (cdr l))))
-(define second cadr)
-(define caddr (lambda (l) (car (cdr (cdr l)))))
-(define third caddr)
-(define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
-(define fourth cadddr)
 
 
 ;; sicp p.158-165
@@ -641,7 +638,7 @@
     (define i 0)
     (define c (call/cc (lambda (cc) cc)))
     (cond
-        ((equal? i n) ())
+        ((ge? i n) ())
         (#t ( do
             (f i)
             (set! i (add i 1))
@@ -650,5 +647,16 @@
     )
 )))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; benchmarking
+
+(define timeit (lambda (f n) ( do
+    (define t0 (time 'time))
+    (for f n)
+    (define dt (sub (time 'time) t0))
+    (if (lt? dt 1e-7) (set! dt 1e-7) ())
+    (if (lt? n 1) (set! n 1) ())
+    (list n dt (mul 1e6 (div dt n)) (div n dt))
+)))
 
 ;; EOF

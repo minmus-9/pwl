@@ -812,7 +812,7 @@ class Globals:
         g.stack.push(frame, x=value)
         return self.lv2pv_setup(g, frame, args)
 
-    def lisp_value_to_py_value_(self, g, frame):  ## XXX move to Rpn
+    def lisp_value_to_py_value_(self, g, frame):
         rpn = g.rpn
         x = frame.x
         if rpn.is_empty_list(x):
@@ -856,7 +856,7 @@ class Globals:
         g.stack.push(frame, x=value)
         return self.pv2lv_setup(g, frame, args)
 
-    def py_value_to_lisp_value_(self, g, frame):  ## XXX move to Rpn
+    def py_value_to_lisp_value_(self, g, frame):
         rpn = g.rpn
         x = frame.x
         if x is None or x is False:
@@ -1311,6 +1311,11 @@ class LispOperators(Operators):
         x, y = g.unpack(frame.x, 2)
         return bounce(frame.c, g, func(x, y))
 
+    @glbl(">string")
+    def op_to_string(self, g, frame):
+        (x,) = g.unpack(frame.x, 1)
+        return bounce(g.stringify_, g, Frame(frame, x=x))
+
     @glbl("atom?")
     def op_atom(self, g, frame):
         rpn = g.rpn
@@ -1522,17 +1527,15 @@ class LispOperators(Operators):
 
         return self.binary(g, frame, f)
 
-    ## XXX for type converison >symbol etc we need to extend Representation
-
     @glbl("type")
     def op_type(self, g, frame):
         def f(x):
             t = g.type(x)
             if t is not SENTINEL:
                 return t
-            if isinstance(x, Lambda):
+            if is_lambda(x):
                 return g.symbol("lambda")
-            if isinstance(x, Continuation):
+            if is_continuation(x):
                 return g.symbol("continuation")
             if callable(x):
                 return g.symbol("primitive")
