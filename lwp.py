@@ -500,6 +500,8 @@ class Environment:
 
 
 class Globals:
+    ## pylint: disable=too-many-public-methods
+
     ## this is just a c struct and it doesn't use list primitives for attr storage
 
     REPRESENTATION_CLASS = Representation
@@ -753,7 +755,131 @@ class Globals:
 
     def do_ffi(self, g, frame):
         assert g is self
-        ...
+        args = frame.x
+        func = frame.proc
+        g.stack.push(frame, x=func)
+
+        if g.rpn.is_empty_list(args):
+            return bounce(self.ffi_args_done, g, [])
+
+        return bounce(
+            self.lisp_value_to_py_value_,
+            g,
+            Frame(frame, x=list(args), c=self.ffi_args_done),
+        )
+
+    def lisp_value_to_py_value(self, x):
+        return trampoline(
+            self.lisp_value_to_py_value_, self, Frame(x=x, c=land)
+        )[1]
+
+    def lv2pv_setup(self, g, frame, args):
+        arg, args = g.rpn.car(args), g.rpn.cdr(args)
+        g.stack.push(frame, x=args)
+        return bounce(
+            self.lisp_value_to_py_value_,
+            g,
+            Frame(frame, x=arg, c=self.lv2pv_next_arg),
+        )
+
+    def lv2pv_next_arg(self, g, value):
+        frame = g.stack.pop()
+        args = frame.x
+
+        if g.rpn.is_empty_list(args):
+            ret = [value]
+            while True:
+                f = g.stack.pop()
+                if f.x is SENTINEL:
+                    break
+                ret.insert(0, f.x)
+            return bounce(frame.c, g, ret)
+
+        g.stack.push(frame, x=value)
+        return self.lv2pv_setup(g, frame, args)
+
+    def lisp_value_to_py_value_(self, g, frame):
+        rpn = g.rpn
+        x = frame.x
+        if rpn.is_empty_list(x):
+            x = None
+        elif rpn.is_true(x):
+            x = True
+        elif rpn.is_symbol(x):
+            x = str(x)
+        elif not rpn.is_pair(x):
+            return bounce(frame.c, g, x)
+
+        g.stack.push(frame, x=SENTINEL)
+        return self.lv2pv_setup(g, frame, x)
+
+    def py_value_to_lisp_value(self, x):
+        return trampoline(
+            self.py_value_to_lisp_value_, self, Frame(x=x, c=land)
+        )[1]
+
+    def pv2lv_setup(self, g, frame, args):
+        arg, args = args[0], args[1:]
+        g.stack.push(frame, x=args)
+        return bounce(
+            self.py_value_to_lisp_value_,
+            g,
+            Frame(frame, x=arg, c=self.pv2lv_next_arg),
+        )
+
+    def pv2lv_next_arg(self, g, value):
+        frame = g.stack.pop()
+        args = frame.x
+        rpn = g.rpn
+
+        if not args:
+            ret = rpn.cons(value, rpn.EL)
+            while True:
+                f = g.stack.pop()
+                if f.x is SENTINEL:
+                    break
+                ret = rpn.cons(f.x, ret)
+            return bounce(frame.c, g, ret)
+
+        g.stack.fpush(frame, x=value)
+        return self.pv2lv_setup(g, frame, args)
+
+    def py_value_to_lisp_value_(self, g, frame):
+        rpn = g.rpn
+        x = frame.x
+        if x is None or x is False:
+            x = rpn.EL
+        elif x is True:
+            x = rpn.T
+        if not isinstance(x, (list, tuple)):
+            return bounce(frame.c, g, x)
+        if not x:
+            return bounce(frame.c, g, rpn.EL)
+
+        g.stack.push(frame, x=SENTINEL)  ## sentinel
+        return self.pv2lv_setup(g, frame, list(x))
+
+    def ffi_args_done(self, g, args):
+        frame = g.stack.pop()
+        func = frame.x
+
+        ret = func(*args)
+
+        return bounce(self.py_value_to_lisp_value_, g, Frame(frame, x=ret))
+
+    def lisp_list_to_py_list(self, lst):
+        rpn = self.rpn
+        ret = []
+        while not rpn.is_empty_list(lst):
+            ret.append(rpn.car(lst))
+            lst = rpn.cdr(lst)
+        return ret
+
+    def py_list_to_lisp_list(self, lst):
+        q = self.rpn.make_queue()
+        for x in lst:
+            q.enqueue(x)
+        return q.get_queue()
 
     ## }}}
 
