@@ -304,7 +304,7 @@ class Queue:
 ## {{{ keyed table
 
 
-class KeyedTable(dict): ## XXX
+class KeyedTable(dict):  ## XXX
     def __init__(self, rpn, _):
         super().__init__()
         self.rpn = rpn
@@ -313,7 +313,9 @@ class KeyedTable(dict): ## XXX
         del self[key]
         return self.rpn.EL
 
-    def get(self, key, default=SENTINEL):  ## pylint: disable=useless-super-delegation
+    def get(
+        self, key, default=SENTINEL
+    ):  ## pylint: disable=useless-super-delegation
         return super().get(key, default)
 
     def set(self, key, value):
@@ -342,12 +344,10 @@ class KeyedTableX:  ## XXX
         while not self.rpn.is_empty_list(node):
             pair = self.rpn.car(node)
             if self.cmp(key, self.rpn.car(pair)):
-                #print("KTH", key, node)
                 return prev, node
             prev = node
             node = self.rpn.cdr(node)
 
-        #print("KTM", key)
         return self.rpn.EL, self.rpn.EL
 
     ###
@@ -413,6 +413,7 @@ class SymbolTable(KeyedTable):
 
 ## }}}
 ## {{{ environment
+
 
 class Environment:
     def __init__(self, g, params, args, parent):
@@ -577,9 +578,9 @@ class Globals:
 
     def stringify(self, sexpr, genv=SENTINEL):
         e = self.genv if genv is SENTINEL else genv
-        return trampoline(
-            self.stringify_, self, Frame(x=sexpr, e=e, c=land)
-        )[1]
+        return trampoline(self.stringify_, self, Frame(x=sexpr, e=e, c=land))[
+            1
+        ]
 
     def stringify_setup(self, g, frame, args):
         assert g is self
@@ -587,7 +588,11 @@ class Globals:
             arg, args = self.rpn.car(args), self.rpn.cdr(args)
         else:
             arg, args = args, self.rpn.EL
-            self.stack.push(Frame(frame, x="."))  ## XXX parser needs to allow this for input!
+            self.stack.push(
+                Frame(
+                    frame, x="."
+                )  ## XXX parser needs to allow this for input!
+            )
         self.stack.push(frame, x=args)
         return bounce(
             self.stringify_, self, Frame(frame, x=arg, c=self.stringify_cont)
@@ -644,9 +649,7 @@ class Globals:
 
     def eval(self, sexpr, genv=SENTINEL):
         e = self.genv if genv is SENTINEL else genv
-        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, c=land))[
-            1
-        ]
+        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, c=land))[1]
 
     def eval_setup(self, frame, args):
         rpn = self.rpn
@@ -697,13 +700,11 @@ class Globals:
 
     def eval_(self, g, frame):
         assert g is self
-        #print("\nE_", frame.x)
         rpn = self.rpn
         x = frame.x
         if rpn.is_symbol(x):
             obj = frame.e.get(x)
             if obj is SENTINEL:
-                #print("\nM", self.stringify(frame.e.get_data_structure()))
                 raise NameError(x)
             return bounce(frame.c, self, obj)
         ## NB test is_atom *after* is_symbol
@@ -1650,6 +1651,7 @@ def main(force_repl=False, lisp=None, lisp_class=Lisp):
         finally:
             if not g.stack.is_empty():
                 print("STACK", g.stack.get_data_structure())
+
 
 ## }}}
 

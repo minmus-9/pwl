@@ -20,6 +20,8 @@
 ;;
 ;; this file is just for fiddling around
 
+;; for lwp.py
+;(define list? (lambda (x) (pair? x)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; playing with quasiquote impl
@@ -253,8 +255,8 @@
     (list n dt (mul 1e6 (div dt n)) (div n dt))
 )))
 
-(timeit (lambda (_) ()) 10)
-(timeit (lambda (_) (kadd 11 31)) 10)
+;(timeit (lambda (_) ()) 10)
+;(timeit (lambda (_) (kadd 11 31)) 10)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -308,8 +310,10 @@
 (define k (kernel))
 (k 'register 'time
     (lambda (k c args) (c (time.time))))
+(k 'register 'test
+    (lambda (k c args) (c (reverse args))))
 
-(k 'call 'time)
+(k 'call 'test 'a 'b 'c)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
