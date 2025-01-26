@@ -29,6 +29,7 @@
 (define cadr (lambda (l) (car (cdr l))))
 (define caddr (lambda (l) (car (cdr (cdr l)))))
 (define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
+(define caddddr (lambda (l) (car (cdr (cdr (cdr (cdr l)))))))
 
 ;; define do
 (special begin$2 (lambda (__special_begin$2_a__ __special_begin$2_b__)
@@ -89,17 +90,20 @@
 (define mod     (lambda (n d) (sub n (mul d (div n d)))))
 
 ;; absolute value
-(define abs     (lambda (x) (
-    cond
-        ((lt? x 0)  (neg x))
-        (#t         x)
-)))
+(define abs (lambda (x)
+    (if
+        (lt? x 0)
+        (neg x)
+        x
+    )
+))
 
 ;; copysign
-(define copysign (lambda (x y) (
-    cond
-        ((lt? y 0) (neg (abs x)))
-        (#t (abs x))
+(define copysign (lambda (x y)
+    (if
+        (lt? y 0)
+        (neg (abs x))
+        (abs x)
 )))
 
 ;; some comparison predicates
@@ -130,7 +134,7 @@
 
 (define list    (lambda (& args) args))
 
-(define bool (lambda (x) (cond (x #t) (#t ()))))
+(define bool (lambda (x) (if x #t ())))
 
 ;; and or not
 
@@ -151,23 +155,26 @@
         (#t (eval (join (quote (or)) (cdr __special_or_args__))))
 )))
 
-(define not     (lambda (x) (cond (x ()) (#t #t))))
+(define not (lambda (x) (if x () #t)))
 
 ;;
 
 (define join (lambda (x y)
-    (cond
-        ((null? x)  y)
-        (#t         (cons (car x) (join (cdr x) y)))
+    (if
+        (null? x)
+        y
+        (cons (car x) (join (cdr x) y))
     )
 ))
 
 (define length (lambda (l) (do
-        (define helper (lambda (l n) (
-            cond
-                ((null? l)  n)
-                (#t         (helper (cdr l) (add n 1)))
-        )))
+        (define helper (lambda (l n)
+            (if
+                (null? l)
+                n
+                (helper (cdr l) (add n 1))
+            )
+        ))
 
         (helper l 0)
 )))
@@ -189,13 +196,15 @@
         (set! __special_let_vars__ (cdr __special_let_vars__))
     )))
     ;; declare everthing, then return (doit)
-    (define __special_let_decls__ (lambda () (
-        cond
-            ((null? __special_let_vars__)   (__special_let_doit__))
-            (#t (do
+    (define __special_let_decls__ (lambda ()
+        (if
+            (null? __special_let_vars__)
+            (__special_let_doit__)
+            (do
                     (__special_let_next__) (__special_let_decls__)
-            ))
-    )))
+            )
+        )
+    ))
     (define __special_let_doit__ (lambda () (do
         (define __special_let_doit_head__ (join (list (quote lambda)) (list __special_let_vdecls__)))
         (define __special_let_doit_mid__  (join __special_let_doit_head__ (list __special_let_body__)))
@@ -205,11 +214,13 @@
     (__special_let_decls__)
 )))
 
-(special assert (lambda (__special_assert_sexpr__) (
-    cond
-        ((eval __special_assert_sexpr__)   ())
-        (#t (error (>string __special_assert_sexpr__)))
-)))
+(special assert (lambda (__special_assert_sexpr__)
+    (if
+        (eval __special_assert_sexpr__)
+        ()
+        (error (>string __special_assert_sexpr__))
+    )
+))
 
 ;; signed integer multiplication from subtraction and right shift (division)
 (define smul (lambda (x y) (do
@@ -248,11 +259,13 @@
     (iter initial sequence)
 )))
 
-(define map1 (lambda (f lst) (
-    cond
-        ((null? lst) ())
-        (#t (cons (f (car lst)) (map1 f (cdr lst))))
-)))
+(define map1 (lambda (f lst)
+    (if
+        (null? lst)
+        ()
+        (cons (f (car lst)) (map1 f (cdr lst)))
+    )
+))
 
 (define accumulate-n (lambda (f initial sequences) (
     if
@@ -276,13 +289,14 @@
 ;; call f for each element of lst
 (define foreach (lambda (f lst) ( do
     (define c (call/cc (lambda (cc) cc)))
-    (cond
-        ((null? lst) ())
-        (#t ( do
+    (if
+        (null? lst)
+        ()
+        ( do
             (f (car lst))
             (set! lst (cdr lst))
             (c c)
-        ))
+        )
     )
 )))
 
@@ -296,15 +310,16 @@
 
     (define add (lambda (x) ( do
         (define node (cons x ()))
-        (cond
-            ((null? (car ht)) ( do
+        (if
+            (null? (car ht))
+            ( do
                 (set-car! ht node)
                 (set-cdr! ht node)
-            ))
-            (#t (do
+            )
+            (do
                 (set-cdr! (cdr ht) node)
                 (set-cdr! ht node)
-            ))
+            )
         )
         dispatch
     )))
@@ -312,18 +327,20 @@
     (define dispatch (lambda (op & args)
         (cond
             ((eq? op (quote add))
-                (cond
-                    ((equal? (length args) 1) (add (car args)))
-                    (#t (error "add takes a single arg"))
+                (if
+                    (equal? (length args) 1)
+                    (add (car args))
+                    (error "add takes a single arg")
                 )
             )
             ((eq? op (quote extend))
-                (cond
-                    ((equal? (length args) 1) ( do
+                (if
+                    (equal? (length args) 1)
+                    ( do
                         (foreach add (car args))
                         dispatch
-                    ))
-                    (#t (error "extend takes a single list arg"))
+                    )
+                    (error "extend takes a single list arg")
                 )
             )
             ((eq? op (quote get)) (car ht))
@@ -336,13 +353,14 @@
 (define reverse (lambda (lst) ( do
     (define r ())
     (define f (lambda ()
-        (cond
-            ((null? lst) ())
-            (#t (do
+        (if
+            (null? lst)
+            ()
+            (do
                 (set! r (cons (car lst) r))
                 (set! lst (cdr lst))
                 #t
-            ))
+            )
         )
     ))
     (while f)
@@ -355,9 +373,10 @@
     (lb (quote add) sym)
     (define f (lambda (lst) ( do
         (define x (eval lst))
-        (cond
-            ((pair? x) (lb (quote extend) x))
-            (#t (lb (quote add) x))
+        (if
+            (pair? x)
+            (lb (quote extend) x)
+            (lb (quote add) x)
         )
     )))
     (foreach f args)
@@ -370,13 +389,13 @@
 (define iter (lambda (lst fin) (do
     (define item ())
     (define next (lambda ()
-        (cond
-            ((null? lst) fin)
-            (#t (do
+        (if
+            (null? lst)
+            fin
+            (do
                     (set! item (car lst))
                     (set! lst (cdr lst))
                     item
-                )
             )
         )
     ))
@@ -387,14 +406,14 @@
     (define index 0)
     (define item fin)
     (define next (lambda ()
-        (cond
-            ((null? lst) fin)
-            (#t (do
+        (if
+            (null? lst)
+            fin
+            (do
                     (set! item (list index (car lst)))
                     (set! index (add index 1))
                     (set! lst (cdr lst))
                     item
-                )
             )
         )
     ))
@@ -412,45 +431,48 @@
     (define dispatch (lambda (op & args)
         (cond
             ((eq? op (quote enqueue))
-                (cond
-                    ((equal? (length args ) 1) ( do
+                (if
+                    (equal? (length args ) 1)
+                    ( do
                         (define node (cons (car args) ()))
-                        (cond
-                            ((null? h) (set! h node))
-                            (#t (set-cdr! t node))  ; this is why easy.py fails
+                        (if
+                            (null? h)
+                            (set! h node)
+                            (set-cdr! t node)
                         )
                         (set! t node)
                         ()
-                    ))
-                    (#t (error "enqueue takes one arg"))
+                    )
+                    (error "enqueue takes one arg")
                 )
             )
             ((eq? op (quote dequeue))
-                (cond
-                    ((equal? (length args) 0)
-                        (cond
-                            ((null? h) (error "queue is empty"))
-                            (#t ( let (
+                (if
+                    (equal? (length args) 0)
+                        (if
+                            (null? h)
+                            (error "queue is empty")
+                            ( let (
                                 (ret (car h)))
                                 (do
                                     (set! h (cdr h))
                                     (if (null? h) (set! t ()) ())
                                     ret
-                                ))
+                                )
                             )
                         )
-                    )
-                    (#t (error "dequeue takes no args"))
+                    (error "dequeue takes no args")
                 )
             )
             ((eq? op (quote empty?)) (eq? h ()))
             ((eq? op (quote enqueue-many))
-                (cond
-                    ((and (equal? (length args) 1) (pair? (car args))) ( do
+                (if
+                    (and (equal? (length args) 1) (pair? (car args)))
+                    ( do
                         (foreach enqueue (car args))
                         dispatch
-                    ))
-                    (#t (error "enqueue-many takes one list arg"))
+                    )
+                    (error "enqueue-many takes one list arg")
                 )
             )
             ((eq? op (quote get-all)) h)
@@ -466,14 +488,16 @@
 (special let* (lambda (vdefs body) (eval (let*$ vdefs body))))
 
 (define let*$ (lambda (vdefs body) ( do
-    (cond
-        ((null? vdefs) body)
-        (#t ( do
+    (if
+        (null? vdefs)
+        body
+        ( do
             (define kv (car vdefs))
             (set! vdefs (cdr vdefs))
             (define k (car kv))
             (define v (cadr kv))
-          `((lambda (,k) ,(let*$ vdefs body)) ,v)))
+          `((lambda (,k) ,(let*$ vdefs body)) ,v)
+        )
     )
 )))
 
@@ -496,9 +520,10 @@
 
 (define last (lambda (l)
     ((lambda (c)
-        (cond
-            ((null? (cdr l)) (car l))
-            (#t (if (set! l (cdr l)) () (c c))) ;; use if to sequence
+        (if
+            (null? (cdr l))
+            (car l)
+            (if (set! l (cdr l)) () (c c)) ;; use if to sequence
         )
     ) (call/cc (lambda (cc) cc)) )
 ))
@@ -531,22 +556,24 @@
                 (let* (
                     (key (car args))
                     (node (table$find items key compare)))
-                    (cond
-                        ((null? node) ())
-                        (#t (cadr node))
+                    (if
+                        (null? node)
+                        ()
+                        (cadr node)
                     )
                 )
             ))
             ((eq? m 'iter) ( do
                 (let ((lst items))
                     (lambda ()
-                        (cond
-                            ((null? lst) ())
-                            (#t ( do
+                        (if
+                            (null? lst)
+                            ()
+                            ( do
                                 (define ret (car lst))
                                 (set! lst (cdr lst))
                                 ret
-                            ))
+                            )
                         )
                     )
                 )
@@ -558,13 +585,14 @@
                     (key (car args))
                     (value (cadr args))
                     (node (table$find items key compare)))
-                    (cond
-                        ((null? node) ( do
+                    (if
+                        (null? node)
+                        ( do
                             (let* (
                                 (node (cons key (cons value ()))))
                                 (set! items (cons node items)))
-                        ))
-                        (#t (set-car! (cdr node) value))
+                        )
+                        (set-car! (cdr node) value)
                     )
                 )
             ))
@@ -617,9 +645,10 @@
 (define while (lambda (f) ( do
     (define c ())
     (define flag (call/cc (lambda (cc) (do (set! c cc) #t))))
-    (cond
-        (flag (c (f)))
-        (#t ())
+    (if
+        flag
+        (c (f))
+        ()
     )
 )))
 
@@ -627,9 +656,10 @@
 (define until (lambda (f) ( do
     (define c ())
     (define flag (call/cc (lambda (cc) (do (set! c cc) ()))))
-    (cond
-        (flag ())
-        (#t (c (f)))
+    (if
+        flag
+        ()
+        (c (f))
     )
 )))
 
@@ -637,13 +667,14 @@
 (define for (lambda (f n) ( do
     (define i 0)
     (define c (call/cc (lambda (cc) cc)))
-    (cond
-        ((ge? i n) ())
-        (#t ( do
+    (if
+        (ge? i n)
+        ()
+        ( do
             (f i)
             (set! i (add i 1))
             (c c)
-        ))
+        )
     )
 )))
 
@@ -658,5 +689,21 @@
     (if (lt? n 1) (set! n 1) ())
     (list n dt (mul 1e6 (div dt n)) (div n dt))
 )))
+
+(define ! (lambda (n) ( do
+    (define r 1)
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (lt? n 2)
+        r
+        ( do
+            (set! r (mul r n))
+            (set! n (sub n 1))
+            (c c)
+        )
+    )
+)))
+
+(timeit (lambda (i) (! 100)) 10)
 
 ;; EOF
