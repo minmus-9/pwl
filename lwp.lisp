@@ -164,12 +164,6 @@
         (#t                 (last (cdr l)))
 )))
 
-(define reverse (lambda (l) (
-    cond
-        ((null? l)          ())
-        (#t                 (join (reverse (cdr l)) (list (car l))))
-)))
-
 (define length (lambda (l) (do
         (define helper (lambda (l n) (
             cond
@@ -264,15 +258,6 @@
     (iter initial sequence)
 )))
 
-(define foreach (lambda (f l) (
-    cond
-        ((null? l) ())
-        (#t (do
-            (f (car l))
-            (foreach f (cdr l))
-        ))
-)))
-
 (define map1 (lambda (f lst) (
     cond
         ((null? lst) ())
@@ -298,4 +283,417 @@
     (map1 g (transpose lists))
 )))
 
-;;; EOF
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; dingus to build a list by appending in linear time. it's an ad-hoc queue
+
+(define list-builder (lambda () ( do
+    (define ht (list () ()))
+
+    (define get (lambda () (car ht)))
+
+    (define add (lambda (x) ( do
+        (define node (cons x ()))
+        (cond
+            ((null? (car ht)) ( do
+                (set-car! ht node)
+                (set-cdr! ht node)
+            ))
+            (#t (do
+                (set-cdr! (cdr ht) node)
+                (set-cdr! ht node)
+            ))
+        )
+        dispatch
+    )))
+
+    (define dispatch (lambda (op & args)
+        (cond
+            ((eq? op (quote add))
+                (cond
+                    ((equal? (length args) 1) (add (car args)))
+                    (#t (error "add takes a single arg"))
+                )
+            )
+            ((eq? op (quote extend))
+                (cond
+                    ((equal? (length args) 1) ( do
+                        (foreach add (car args))
+                        dispatch
+                    ))
+                    (#t (error "extend takes a single list arg"))
+                )
+            )
+            ((eq? op (quote get)) (car ht))
+        )
+    ))
+
+    dispatch
+)))
+
+;; the stdlib reverse routine is quadratic time in list size; this one is
+;; linear. but we can't put it into stdlib because lb fails for easy.py.
+;; and i want easy.py to be able to use stdlib.
+
+;; for rec.py and up, let's take the linear version...
+
+(define reverse (lambda (lst) (do
+    (define LB (list-builder))
+    (accumulate
+        (lambda (x lb) (lb (quote add) x))
+        LB
+        lst
+    )
+    (LB (quote get))
+)))
+
+;; save some (eval (join (quote (sym)) args)) awkwardness
+(special eval-flattened (lambda (sym & args) ( do
+    (define lb (list-builder))
+    (lb (quote add) sym)
+    (define f (lambda (lst) ( do
+        (define x (eval lst))
+        (cond
+            ((pair? x) (lb (quote extend) x))
+            (#t (lb (quote add) x))
+        )
+    )))
+    (foreach f args)
+    (eval (lb (quote get)))
+)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; it's still python-thinking today :D
+
+(define iter (lambda (lst fin) (do
+    (define item ())
+    (define next (lambda ()
+        (cond
+            ((null? lst) fin)
+            (#t (do
+                    (set! item (car lst))
+                    (set! lst (cdr lst))
+                    item
+                )
+            )
+        )
+    ))
+    next
+)))
+
+(define enumerate (lambda (lst fin) (do
+    (define index 0)
+    (define item fin)
+    (define next (lambda ()
+        (cond
+            ((null? lst) fin)
+            (#t (do
+                    (set! item (list index (car lst)))
+                    (set! index (add index 1))
+                    (set! lst (cdr lst))
+                    item
+                )
+            )
+        )
+    ))
+    next
+)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; queue
+
+(define queue (lambda () ( do
+    (define h ())
+    (define t ())
+
+    (define dispatch (lambda (op & args)
+        (cond
+            ((eq? op (quote enqueue))
+                (cond
+                    ((equal? (length args ) 1) ( do
+                        (define node (cons (car args) ()))
+                        (cond
+                            ((null? h) (set! h node))
+                            (#t (set-cdr! t node))  ; this is why easy.py fails
+                        )
+                        (set! t node)
+                        ()
+                    ))
+                    (#t (error "enqueue takes one arg"))
+                )
+            )
+            ((eq? op (quote dequeue))
+                (cond
+                    ((equal? (length args) 0)
+                        (cond
+                            ((null? h) (error "queue is empty"))
+                            (#t ( let (
+                                (ret (car h)))
+                                (do
+                                    (set! h (cdr h))
+                                    (if (null? h) (set! t ()) ())
+                                    ret
+                                ))
+                            )
+                        )
+                    )
+                    (#t (error "dequeue takes no args"))
+                )
+            )
+            ((eq? op (quote empty?)) (eq? h ()))
+            ((eq? op (quote enqueue-many))
+                (cond
+                    ((and (equal? (length args) 1) (pair? (car args))) ( do
+                        (foreach enqueue (car args))
+                        dispatch
+                    ))
+                    (#t (error "enqueue-many takes one list arg"))
+                )
+            )
+            ((eq? op (quote get-all)) h)
+        )
+    ))
+    dispatch
+)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; let*
+
+(special let* (lambda (vdefs body) (eval (let*$ vdefs body))))
+
+(define let*$ (lambda (vdefs body) ( do
+    (cond
+        ((null? vdefs) body)
+        (#t ( do
+            (define kv (car vdefs))
+            (set! vdefs (cdr vdefs))
+            (define k (car kv))
+            (define v (cadr kv))
+          `((lambda (,k) ,(let*$ vdefs body)) ,v)))
+    )
+)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; let
+
+(special let (lambda (vdefs body) (eval (let$ vdefs body))))
+
+(define let$ (lambda (vdefs body) ( do
+    (define vdecls (transpose vdefs))
+    (define vars (car vdecls))
+    (define vals (cadr vdecls))
+    `((lambda (,@vars) ,body) ,@vals)
+)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; range
+
+(define range (lambda (n) ( do
+    (define l ())
+    (define c (call/cc (lambda (cc) cc)))
+    (cond
+        ((equal? n 0) l)
+        (#t (do
+            (set! n (sub n 1))
+            (set! l (cons n l))
+            (c c)
+        ))
+    )
+)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; faster (last) esp for (do)
+
+(define last (lambda (l)            ;; can't use (do)!
+    ((lambda (c)
+        (cond
+            ((null? (cdr l)) (car l))
+            (#t (if (set! l (cdr l)) () (c c))) ;; use if to sequence
+        )
+    ) (call/cc (lambda (cc) cc)) )
+))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; def
+
+(special def (lambda (funcargs body) (eval (def$ funcargs body) 1)))
+
+(define def$ (lambda (funcargs body) ( do
+    (if (or (not (pair? funcargs)) (null? funcargs))
+        (error "def needs a func to define!")
+        ())
+    (define f (car funcargs))
+    (define a (cdr funcargs))
+    `(define ,f (lambda (,@a) ,body))
+)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; associative table
+
+(define table (lambda (compare) ( do
+    (define items ())
+    (define dispatch (lambda (m & args) ( do
+        (cond
+            ((eq? m 'known) (not (null? (table$find items key compare))))
+            ((eq? m 'del) (set! items (table$delete items (car args) compare)))
+            ((eq? m 'get) ( do
+                (let* (
+                    (key (car args))
+                    (node (table$find items key compare)))
+                    (cond
+                        ((null? node) ())
+                        (#t (cadr node))
+                    )
+                )
+            ))
+            ((eq? m 'iter) ( do
+                (let ((lst items))
+                    (lambda ()
+                        (cond
+                            ((null? lst) ())
+                            (#t ( do
+                                (define ret (car lst))
+                                (set! lst (cdr lst))
+                                ret
+                            ))
+                        )
+                    )
+                )
+            ))
+            ((eq? m 'len) (length items))
+            ((eq? m 'raw) items)
+            ((eq? m 'set) ( do
+                (let* (
+                    (key (car args))
+                    (value (cadr args))
+                    (node (table$find items key compare)))
+                    (cond
+                        ((null? node) ( do
+                            (let* (
+                                (node (cons key (cons value ()))))
+                                (set! items (cons node items)))
+                        ))
+                        (#t (set-car! (cdr node) value))
+                    )
+                )
+            ))
+            (#t (error "unknown method"))
+        )
+    )))
+    dispatch
+)))
+
+(define table$find (lambda (items key compare)
+    (cond
+      ((null? items) ())
+      ((compare (car (car items)) key) (car items))
+      (#t (table$find (cdr items) key compare))
+    )
+))
+
+(define table$delete (lambda (items key compare) ( do
+    (define prev ())
+    (define helper (lambda (assoc key) ( do
+        (cond
+            ((null? assoc) items)
+            ((compare (car (car assoc)) key) (do
+                (cond
+                    ((null? prev) (cdr assoc))
+                    (#t (do (set-cdr! prev (cdr assoc)) items))
+                )
+            ))
+            (#t ( do
+                (set! prev assoc)
+                (helper (cdr assoc) key)
+            ))
+        )
+    )))
+    (helper items key)
+)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; looping
+
+;; call f in a loop forever
+(define loop (lambda (f) ( do
+    (define c (call/cc (lambda (cc) cc)))
+    (f)
+    (c c)
+)))
+
+;; loop while f returns true
+(define while (lambda (f) ( do
+    (define c ())
+    (define flag (call/cc (lambda (cc) (do (set! c cc) #t))))
+    (cond
+        (flag (c (f)))
+        (#t ())
+    )
+)))
+
+;; loop until f returns true
+(define until (lambda (f) ( do
+    (define c ())
+    (define flag (call/cc (lambda (cc) (do (set! c cc) ()))))
+    (cond
+        (flag ())
+        (#t (c (f)))
+    )
+)))
+
+;; call f for each element of lst
+;; this is faster than the stdlib version
+(define foreach (lambda (f lst) ( do
+    (define c (call/cc (lambda (cc) cc)))
+    (cond
+        ((null? lst) ())
+        (#t ( do
+            (f (car lst))
+            (set! lst (cdr lst))
+            (c c)
+        ))
+    )
+)))
+
+;; call f a given number of times as (f counter)
+(define for (lambda (f n) ( do
+    (define i 0)
+    (define c (call/cc (lambda (cc) cc)))
+    (cond
+        ((equal? i n) ())
+        (#t ( do
+            (f i)
+            (set! i (add i 1))
+            (c c)
+        ))
+    )
+)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; misc
+
+;; XXX is this faster than the ffi one?
+(define reverse (lambda (lst) ( do
+    (define r ())
+    (define f (lambda ()
+        (cond
+            ((null? lst) ())
+            (#t (do
+                (set! r (cons (car lst) r))
+                (set! lst (cdr lst))
+                #t
+            ))
+        )
+    ))
+    (while f)
+    r
+)))
+
+
+;; EOF
