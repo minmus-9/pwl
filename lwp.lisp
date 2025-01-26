@@ -17,13 +17,17 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+;; to accompany quasiquote
 (define unquote (lambda (x) (error "cannot unquote here")))
 (define unquote-splicing (lambda (x) (error "cannot unquote-splicing here")))
 
+;; used everywhere
 (define null? (lambda (x) (if (eq? x ()) #t ())))
+(define pair? (lambda (x) (if (eq? (type x) 'pair) #t ())))
 
+;; define do
 (special begin$2 (lambda (__special_begin$2_a__ __special_begin$2_b__)
-     (if
+     (if  ;; can't remember where i saw this but i like it
         (eval __special_begin$2_a__ 1)
         (eval __special_begin$2_b__ 1)
         (eval __special_begin$2_b__ 1)
@@ -47,6 +51,8 @@
     )
 ))
 
+;; define cond
+
 (special cond (lambda (& __special_cond_pcs__)
     (eval (cond$ __special_cond_pcs__) 1)))
 
@@ -61,14 +67,12 @@
     )
 ))
 
+;; here we go
+
 ;; define negation and addition first
 (define neg     (lambda (x) (sub 0 x)))
 (define add2    (lambda (x y) (sub x (neg y))))
-
-;; oh, and mod
-(define mod     (lambda (n d) (sub n (mul2 d (div n d)))))
-
-(define add (lambda (x & args)
+(define add     (lambda (x & args)
     (if
         (null? args)
         x
@@ -76,7 +80,10 @@
     )
 ))
 
-;; absolute value next
+;; oh, and mod
+(define mod     (lambda (n d) (sub n (mul d (div n d)))))
+
+;; absolute value
 (define abs     (lambda (x) (
     cond
         ((lt? x 0)  (neg x))
@@ -120,6 +127,8 @@
 
 (define bool (lambda (x) (cond (x #t) (#t ()))))
 
+;; and or not
+
 (special and (lambda (& __special_and_args__) (
     cond
         ((null? __special_and_args__) ())
@@ -139,6 +148,8 @@
 
 (define not     (lambda (x) (cond (x ()) (#t #t))))
 
+;;
+
 (define join (lambda (x y)
     (cond
         ((null? x)  y)
@@ -152,8 +163,6 @@
         ((null? (cdr l))    (car l))
         (#t                 (last (cdr l)))
 )))
-
-(define do (lambda (& args) (last args)))
 
 (define reverse (lambda (l) (
     cond

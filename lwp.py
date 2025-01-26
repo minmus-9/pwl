@@ -304,7 +304,24 @@ class Queue:
 ## {{{ keyed table
 
 
-class KeyedTable:
+class KeyedTable(dict): ## XXX
+    def __init__(self, rpn, _):
+        super().__init__()
+        self.rpn = rpn
+
+    def delete(self, key):
+        del self[key]
+        return self.rpn.EL
+
+    def get(self, key, default=SENTINEL):  ## pylint: disable=useless-super-delegation
+        return super().get(key, default)
+
+    def set(self, key, value):
+        self[key] = value
+        return self.rpn.EL
+
+
+class KeyedTableX:  ## XXX
     ## NB compare() has to do its own type-checking! this also means
     ##    that it needs to be bound to the same Representation!
     def __init__(self, rpn, compare):
@@ -346,11 +363,17 @@ class KeyedTable:
         return self.rpn.T
 
     def get(self, key, default=SENTINEL):
-        _, node = self.find(key)
+        rpn = self.rpn
+        prev, node = self.find(key)
         if self.rpn.is_empty_list(node):
             return default
-        pair = self.rpn.car(node)
-        return self.rpn.cdr(pair)
+        if not rpn.is_empty_list(prev):
+            ## move to front
+            rpn.set_cdr(prev, rpn.cdr(node))
+            rpn.set_cdr(node, self.t)
+            self.t = node
+        pair = rpn.car(node)
+        return rpn.cdr(pair)
 
     def set(self, key, value):
         _, node = self.find(key)
@@ -818,7 +841,7 @@ class Operators:
     ## this is a c struct
 
     ## pylint bait
-    GLOBAL_ATTRS_ = SPECIAL_ATTRS_ = {}
+    GLOBAL_ATTRS_ = {}
 
     def __init__(self, g):
         self.g = g
@@ -828,11 +851,6 @@ class Operators:
             if callable(value) and hasattr(value, "lisp_op"):
                 sym = g.symbol(value.lisp_op)
                 self.GLOBALS.set(sym, value)
-        for k in self.SPECIAL_ATTRS_:
-            value = getattr(self, k, None)
-            if callable(value) and hasattr(value, "lisp_op_type"):
-                sym = g.symbol(value.lisp_op_type[1])
-                self.GLOBALS.set(sym, value)
 
     @classmethod
     def __init_subclass__(cls, **kw):
@@ -840,7 +858,8 @@ class Operators:
         glbls = {}
         for attr in dir(cls):
             value = getattr(cls, attr)
-            glbls.setdefault(attr)
+            if hasattr(value, "lisp_op"):
+                glbls.setdefault(attr)
         cls.GLOBAL_ATTRS_ = glbls
 
     def get_env(self):
@@ -1289,7 +1308,7 @@ class BaseOperators(Operators):
         rpn = g.rpn
 
         def f(x, y):
-            return rpn.setcarbang(x, y)
+            return rpn.set_car(x, y)
 
         return self.binary(g, frame, f)
 
@@ -1298,7 +1317,7 @@ class BaseOperators(Operators):
         rpn = g.rpn
 
         def f(x, y):
-            return rpn.setcdrbang(x, y)
+            return rpn.set_cdr(x, y)
 
         return self.binary(g, frame, f)
 
