@@ -684,7 +684,10 @@ class Globals:
                 ret = rpn.cons(f.x, ret)
             ## at this point, need to see if proc is ffi
             if getattr(proc, "ffi", False):
-                return bounce(self.do_ffi, self, Frame(x=ret, proc=proc))
+                ## XXX construct args as a list not pair
+                return bounce(
+                    self.do_ffi, self, Frame(frame, x=ret, proc=proc)
+                )
             return bounce(proc, self, Frame(frame, x=ret))
 
         self.stack.push(frame, x=value)
@@ -765,7 +768,7 @@ class Globals:
         return bounce(
             self.lisp_value_to_py_value_,
             g,
-            Frame(frame, x=list(args), c=self.ffi_args_done),
+            Frame(frame, x=args, c=self.ffi_args_done),
         )
 
     def lisp_value_to_py_value(self, x):
@@ -805,9 +808,7 @@ class Globals:
             x = None
         elif rpn.is_true(x):
             x = True
-        elif rpn.is_symbol(x):
-            x = str(x)
-        elif not rpn.is_pair(x):
+        if not isinstance(x, list):
             return bounce(frame.c, g, x)
 
         g.stack.push(frame, x=SENTINEL)
@@ -863,7 +864,7 @@ class Globals:
         frame = g.stack.pop()
         func = frame.x
 
-        ret = func(*args)
+        ret = func(g, args)
 
         return bounce(self.py_value_to_lisp_value_, g, Frame(frame, x=ret))
 
@@ -1526,6 +1527,40 @@ class BaseOperators(Operators):
             return g.symbol("opaque")
 
         return self.unary(g, frame, f)
+
+    ## }}}
+    ## {{{ ffi
+
+    def module_ffi(self, g, args, module):
+        ## pylint: disable=no-self-use
+        if not args:
+            raise TypeError("at least one arg required")
+        sym = args.pop(0)
+        if not g.rpn.is_symbol(sym):
+            raise TypeError(f"expected symbol, got {sym!r}")
+        func = getattr(module, str(sym), None)  ## XXX sym stringification
+        if func is None:
+            raise ValueError(f"function {sym!r} does not exist")
+        return func(*args)
+
+    @ffi("math")
+    def op_ffi_math(self, g, args):
+        import math  ## pylint: disable=import-outside-toplevel
+        return self.module_ffi(g, args, math)
+
+    @ffi("time")
+    def op_ffi_time(self, g, args):
+        import time  ## pylint: disable=import-outside-toplevel
+
+        def f(args):
+            ret = []
+            for arg in args:
+                if isinstance(arg, list):
+                    arg = tuple(arg)
+                ret.append(arg)
+            return ret
+
+        return self.module_ffi(g, f(args), time)
 
     ## }}}
 
