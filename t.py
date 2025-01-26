@@ -24,10 +24,13 @@
 ## pylint: disable=invalid-name
 ## XXX pylint: disable=missing-docstring
 
-from pwl import lisp
+#from pwl import lisp
+from lwp import Lisp, bounce
+lisp = Lisp()
 
 
 def go():
+    lisp.execute(open("lwp.lisp", "r").read())
     _, cont = lisp.execute(  ## pylint: disable=unbalanced-tuple-unpacking
         r"""
 (define n 0)
@@ -54,12 +57,12 @@ def go():
             (frame,) = args  ## lisp.py
             out = (frame.c,)
         else:
-            state, frame = args  ## oo.py
-            out = (frame.c, state)
+            g, frame = args  ## oo.py
+            out = (frame.c, g)
         print("f", frame.__dict__)
         ## recursive call to continuation we made above
         ret = lisp.call(cont, lisp.lisp_value_to_py_value(frame.x)[-1])
-        return lisp.bounce(*out, ret)
+        return bounce(*out, ret)
 
     ## jam f into the namespace. now it's an anonymous op.
     lisp.define("f", f)
@@ -81,13 +84,13 @@ def go():
     G(7)
 
     @lisp.ffi("test")
-    def h(x):
+    def h(g, args):
+        (x,) = args
         print("h got", x)
         return x + 17
 
-    print(lisp.execute("(ffi 'test 23)"))
-    ## hmph. gak.
-    print(lisp.call("ffi", [lisp.symbol("quote"), lisp.symbol("test")], 23))
+    print(lisp.execute("(test 23)"))
+    print("OK")
 
 
 if __name__ == "__main__":

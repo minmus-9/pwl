@@ -157,13 +157,6 @@
     )
 ))
 
-(define last    (lambda (l) (
-    cond
-        ((null? l)          (error "list empty!"))
-        ((null? (cdr l))    (car l))
-        (#t                 (last (cdr l)))
-)))
-
 (define length (lambda (l) (do
         (define helper (lambda (l n) (
             cond
@@ -283,6 +276,19 @@
     (map1 g (transpose lists))
 )))
 
+;; call f for each element of lst
+(define foreach (lambda (f lst) ( do
+    (define c (call/cc (lambda (cc) cc)))
+    (cond
+        ((null? lst) ())
+        (#t ( do
+            (f (car lst))
+            (set! lst (cdr lst))
+            (c c)
+        ))
+    )
+)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; dingus to build a list by appending in linear time. it's an ad-hoc queue
 
@@ -330,20 +336,20 @@
     dispatch
 )))
 
-;; the stdlib reverse routine is quadratic time in list size; this one is
-;; linear. but we can't put it into stdlib because lb fails for easy.py.
-;; and i want easy.py to be able to use stdlib.
-
-;; for rec.py and up, let's take the linear version...
-
-(define reverse (lambda (lst) (do
-    (define LB (list-builder))
-    (accumulate
-        (lambda (x lb) (lb (quote add) x))
-        LB
-        lst
-    )
-    (LB (quote get))
+(define reverse (lambda (lst) ( do
+    (define r ())
+    (define f (lambda ()
+        (cond
+            ((null? lst) ())
+            (#t (do
+                (set! r (cons (car lst) r))
+                (set! lst (cdr lst))
+                #t
+            ))
+        )
+    ))
+    (while f)
+    r
 )))
 
 ;; save some (eval (join (quote (sym)) args)) awkwardness
@@ -489,26 +495,9 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; range
+;; last
 
-(define range (lambda (n) ( do
-    (define l ())
-    (define c (call/cc (lambda (cc) cc)))
-    (cond
-        ((equal? n 0) l)
-        (#t (do
-            (set! n (sub n 1))
-            (set! l (cons n l))
-            (c c)
-        ))
-    )
-)))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; faster (last) esp for (do)
-
-(define last (lambda (l)            ;; can't use (do)!
+(define last (lambda (l)
     ((lambda (c)
         (cond
             ((null? (cdr l)) (car l))
@@ -647,20 +636,6 @@
     )
 )))
 
-;; call f for each element of lst
-;; this is faster than the stdlib version
-(define foreach (lambda (f lst) ( do
-    (define c (call/cc (lambda (cc) cc)))
-    (cond
-        ((null? lst) ())
-        (#t ( do
-            (f (car lst))
-            (set! lst (cdr lst))
-            (c c)
-        ))
-    )
-)))
-
 ;; call f a given number of times as (f counter)
 (define for (lambda (f n) ( do
     (define i 0)
@@ -678,22 +653,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; misc
 
-;; XXX is this faster than the ffi one?
-(define reverse (lambda (lst) ( do
-    (define r ())
-    (define f (lambda ()
-        (cond
-            ((null? lst) ())
-            (#t (do
-                (set! r (cons (car lst) r))
-                (set! lst (cdr lst))
-                #t
-            ))
-        )
-    ))
-    (while f)
-    r
-)))
-
+(define r (range 500))
+(define t (time 'time))
+(reverse r)
+(define dt (sub (time 'time) t))
+(print dt)
 
 ;; EOF

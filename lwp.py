@@ -840,7 +840,7 @@ class Globals:
                 ret = rpn.cons(f.x, ret)
             return bounce(frame.c, g, ret)
 
-        g.stack.fpush(frame, x=value)
+        g.stack.push(frame, x=value)
         return self.pv2lv_setup(g, frame, args)
 
     def py_value_to_lisp_value_(self, g, frame):  ## XXX move to Rpn
@@ -1038,6 +1038,7 @@ class Operators:
 
     def ffi(self, name):
         def wrap(func):
+            func.ffi = True
             self.FFI.set(self.g.symbol(name), func)
             return func
 
@@ -1060,10 +1061,10 @@ class Operators:
 
 
 ## }}}
-## {{{ base operators
+## {{{ lisp operators
 
 
-class BaseOperators(Operators):
+class LispOperators(Operators):
     ## pylint: disable=too-many-public-methods
 
     ## {{{ special forms
@@ -1544,12 +1545,28 @@ class BaseOperators(Operators):
     @ffi("math")
     def op_ffi_math(self, g, args):
         import math  ## pylint: disable=import-outside-toplevel
+
         return self.module_ffi(g, args, math)
 
     @ffi("random")
     def op_ffi_random(self, g, args):
         import random  ## pylint: disable=import-outside-toplevel
+
         return self.module_ffi(g, args, random)
+
+    @ffi("range")
+    def op_ffi_range(self, _, args):
+        ## pylint: disable=no-self-use
+        return list(range(*args))
+
+    @ffi("shuffle")
+    def op_ffi_shuffle(self, _, args):
+        ## pylint: disable=no-self-use
+        import random  ## pylint: disable=import-outside-toplevel
+
+        (l,) = args
+        random.shuffle(l)
+        return l
 
     @ffi("time")
     def op_ffi_time(self, g, args):
@@ -1569,11 +1586,103 @@ class BaseOperators(Operators):
 
 
 ## }}}
+## {{{ main repl
+
+
+def repl(g, callback):
+    try:
+        import readline as _  ## pylint: disable=import-outside-toplevel
+    except ImportError:
+        pass
+
+    ## pylint: disable=unused-variable
+    p, rc, stop = Parser(g, callback), 0, False
+
+    def feed(x):
+        nonlocal p, rc, stop
+        try:
+            p.feed(x)
+        except SystemExit as exc:
+            stop, rc = True, exc.args[0]
+        except SyntaxError:
+            ## have to reset scanner/parser state and stack
+            p = Parser(g, callback)
+            g.stack.clear()
+            traceback.print_exception(*sys.exc_info())
+        except:  ## pylint: disable=bare-except
+            ## reset stack because we have no clue what just happened
+            g.stack.clear()
+            traceback.print_exception(*sys.exc_info())
+
+    while not stop:
+        try:
+            line = input("lisp> ") + "\n"
+        except (EOFError, KeyboardInterrupt):
+            feed(None)
+            break
+        feed(line)
+    print("\nbye")
+    return rc
+
+
+def main(force_repl=False, lisp=None, lisp_class=None):
+    g = lisp or (Lisp if lisp_class is None else lisp_class)()
+
+    def callback(sexpr):
+        try:
+            value = g.eval(sexpr)
+        except:
+            print("Offender (pyth):", sexpr)
+            print("Offender (lisp):", g.stringify(sexpr), "\n")
+            raise
+        if not g.rpn.is_empty_list(value):
+            print(g.stringify(value))
+
+    def eat(src):
+        p = Parser(g, callback)
+        p.feed(src)
+        p.feed(None)
+
+    def load(filename):
+        for base in [os.getcwd(), os.path.dirname(__file__)] + sys.path:
+            path = os.path.join(base, filename)
+            if os.path.exists(path):
+                filename = path
+                break
+        else:
+            raise RuntimeError(f"cannot find {filename}")
+        with open(  ## pylint: disable=unspecified-encoding
+            filename, "r"
+        ) as fp:
+            eat(fp.read())
+
+    stop = True
+    for filename in sys.argv[1:]:
+        if filename == "+":
+            try:
+                sys.set_int_max_str_digits(0)
+            except AttributeError:
+                pass
+            continue
+        if filename == "-":
+            stop = False
+            break
+        load(filename)
+        stop = True
+    if force_repl or not stop:
+        try:
+            raise SystemExit(repl(g, callback))
+        finally:
+            if not g.stack.is_empty():
+                print("STACK", g.stack.get_data_structure())
+
+
+## }}}
 ## {{{ lisp class
 
 
 class Lisp(Globals):
-    OPERATOR_CLASS = BaseOperators
+    OPERATOR_CLASS = LispOperators
 
     def __init__(
         self,
@@ -1583,6 +1692,41 @@ class Lisp(Globals):
     ):
         operator_class = operator_class or self.OPERATOR_CLASS
         super().__init__(operator_class, representation, representation_class)
+
+    def call(self, obj, *args):
+        if self.rpn.is_string(obj):
+            obj = self.symbol(obj)  ## XXX implicit str assumption
+        sexpr = self.py_value_to_lisp_value([obj] + list(args))
+        return self.lisp_value_to_py_value(self.eval(sexpr))
+
+    def define(self, name, value, env=None):
+        env = self.genv if env is None else env
+        env.set(self.symbol(str(name)), value)  ## implicit str assumption
+
+    def execute(self, text):
+        results = []
+
+        def callback(sexpr):
+            results.append(self.lisp_value_to_py_value(self.eval(sexpr)))
+
+        self.parse(text, callback)
+        return results
+
+    def lookup(self, name, env=None):
+        name = self.symbol(str(name))  ## implicit str assumption
+        env = self.genv if env is None else env
+        ret = env.get(name)
+        return None if ret is SENTINEL else ret
+
+    main = staticmethod(main)
+
+    def parse(self, text, callback):
+        p = Parser(self, callback)
+        p.feed(text)
+        p.feed(None)
+
+    def repl(self, callback):
+        return repl(self, callback)
 
 
 ## }}}
@@ -1610,14 +1754,20 @@ class Scanner:
 
     ESC = {"t": "\t", "n": "\n", "r": "\r", '"': '"', "\\": "\\"}
 
-    def __init__(self, callback):
+    DELIM_LUT = {"(": ")", "[": "]"}
+
+    def __init__(self, g, callback):
+        self.g = g
         self.callback = callback
         self.token = ""
         self.state = self.S_SYM
+        self.stack = g.rpn.new_stack()
 
     def feed(self, text):
         ## pylint: disable=too-many-branches,too-many-statements
         if text is None:
+            if not self.stack.is_empty():
+                raise SyntaxError(f"eof in {self.stack.top()}")
             self.push(self.T_SYM)
             self.push(self.T_EOF)
             return
@@ -1669,10 +1819,17 @@ class Scanner:
                 if self.token:
                     raise SyntaxError("quote is not a delimiter")
                 self.state = self.S_STR
-            elif ch == "(":
+            elif ch in "([":
+                self.stack.push(self.g.symbol(self.DELIM_LUT[ch]))
                 self.push(self.T_SYM)
                 self.push(self.T_LPAR)
-            elif ch == ")":
+            elif ch in ")]":
+                if self.stack.is_empty():
+                    raise SyntaxError(f"too many {ch!r}")
+                c = self.stack.pop()
+                if not self.g.rpn.eq(c, self.g.symbol(ch)):
+                    ## XXX stringify symbol
+                    raise SyntaxError(f"expected {str(c)!r}, got {ch!r}")
                 self.push(self.T_SYM)
                 self.push(self.T_RPAR)
             else:
@@ -1699,7 +1856,7 @@ class Parser:
     def __init__(self, g, callback):
         self.g, self.callback = g, callback
         self.stack = g.rpn.new_stack()
-        self.scanner = Scanner(self.process_token)
+        self.scanner = Scanner(g, self.process_token)
         self.feed = self.scanner.feed
         self.q_map = {  ## could if-away these special cases but just use dict
             g.symbol("'"): g.symbol("quote"),
@@ -1775,98 +1932,6 @@ class Parser:
         quoted, sexpr = self.process_syms(quoted, sexpr)
         elt = rpn.cons(replacement, rpn.cons(quoted, rpn.EL))
         return elt, sexpr
-
-
-## }}}
-## {{{ main repl
-
-
-def repl(g, callback):
-    try:
-        import readline as _  ## pylint: disable=import-outside-toplevel
-    except ImportError:
-        pass
-
-    ## pylint: disable=unused-variable
-    p, rc, stop = Parser(g, callback), 0, False
-
-    def feed(x):
-        nonlocal p, rc, stop
-        try:
-            p.feed(x)
-        except SystemExit as exc:
-            stop, rc = True, exc.args[0]
-        except SyntaxError:
-            ## have to reset scanner/parser state and stack
-            p = Parser(g, callback)
-            g.stack.clear()
-            traceback.print_exception(*sys.exc_info())
-        except:  ## pylint: disable=bare-except
-            ## reset stack because we have no clue what just happened
-            g.stack.clear()
-            traceback.print_exception(*sys.exc_info())
-
-    while not stop:
-        try:
-            line = input("lisp> ") + "\n"
-        except (EOFError, KeyboardInterrupt):
-            feed(None)
-            break
-        feed(line)
-    print("\nbye")
-    return rc
-
-
-def main(force_repl=False, lisp=None, lisp_class=Lisp):
-    g = lisp or lisp_class()
-
-    def callback(sexpr):
-        try:
-            value = g.eval(sexpr)
-        except:
-            print("Offender (pyth):", sexpr)
-            print("Offender (lisp):", g.stringify(sexpr), "\n")
-            raise
-        if not g.rpn.is_empty_list(value):
-            print(g.stringify(value))
-
-    def eat(src):
-        p = Parser(g, callback)
-        p.feed(src)
-        p.feed(None)
-
-    def load(filename):
-        for base in [os.getcwd(), os.path.dirname(__file__)] + sys.path:
-            path = os.path.join(base, filename)
-            if os.path.exists(path):
-                filename = path
-                break
-        else:
-            raise RuntimeError(f"cannot find {filename}")
-        with open(  ## pylint: disable=unspecified-encoding
-            filename, "r"
-        ) as fp:
-            eat(fp.read())
-
-    stop = True
-    for filename in sys.argv[1:]:
-        if filename == "+":
-            try:
-                sys.set_int_max_str_digits(0)
-            except AttributeError:
-                pass
-            continue
-        if filename == "-":
-            stop = False
-            break
-        load(filename)
-        stop = True
-    if force_repl or not stop:
-        try:
-            raise SystemExit(repl(g, callback))
-        finally:
-            if not g.stack.is_empty():
-                print("STACK", g.stack.get_data_structure())
 
 
 ## }}}
