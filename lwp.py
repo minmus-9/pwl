@@ -5,8 +5,6 @@
 ## pylint: disable=invalid-name,too-many-lines
 ## XXX pylint: disable=missing-docstring
 
-## XXX import FFI
-
 import os
 import sys
 import traceback
@@ -801,14 +799,14 @@ class Globals:
         g.stack.push(frame, x=value)
         return self.lv2pv_setup(g, frame, args)
 
-    def lisp_value_to_py_value_(self, g, frame):
+    def lisp_value_to_py_value_(self, g, frame):  ## XXX move to Rpn
         rpn = g.rpn
         x = frame.x
         if rpn.is_empty_list(x):
             x = None
         elif rpn.is_true(x):
             x = True
-        if not isinstance(x, list):
+        if not isinstance(x, g.rpn.Pair):
             return bounce(frame.c, g, x)
 
         g.stack.push(frame, x=SENTINEL)
@@ -845,7 +843,7 @@ class Globals:
         g.stack.fpush(frame, x=value)
         return self.pv2lv_setup(g, frame, args)
 
-    def py_value_to_lisp_value_(self, g, frame):
+    def py_value_to_lisp_value_(self, g, frame):  ## XXX move to Rpn
         rpn = g.rpn
         x = frame.x
         if x is None or x is False:
@@ -1548,6 +1546,11 @@ class BaseOperators(Operators):
         import math  ## pylint: disable=import-outside-toplevel
         return self.module_ffi(g, args, math)
 
+    @ffi("random")
+    def op_ffi_random(self, g, args):
+        import random  ## pylint: disable=import-outside-toplevel
+        return self.module_ffi(g, args, random)
+
     @ffi("time")
     def op_ffi_time(self, g, args):
         import time  ## pylint: disable=import-outside-toplevel
@@ -1765,9 +1768,11 @@ class Parser:
         if rpn.is_empty_list(sexpr):
             raise SyntaxError(f"got {elt!r} at end of list")
         quoted, sexpr = rpn.car(sexpr), rpn.cdr(sexpr)
-        if rpn.is_symbol(quoted) and quoted in self.q_map:
-            ## XXX this is recursive but likely ok. no, fix. it. fix it.
-            quoted, sexpr = self.process_syms(quoted, sexpr)
+        if not (rpn.is_symbol(quoted) and quoted in self.q_map):
+            elt = rpn.cons(replacement, rpn.cons(quoted, rpn.EL))
+            return elt, sexpr
+        ## XXX this is recursive but likely ok. no, fix. it. fix it.
+        quoted, sexpr = self.process_syms(quoted, sexpr)
         elt = rpn.cons(replacement, rpn.cons(quoted, rpn.EL))
         return elt, sexpr
 
