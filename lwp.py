@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"lwp.py"
+"lwp.py - reimpl of pwl.py using lispy data structures (closer to c port)"
 
 ## pylint: disable=invalid-name,too-many-lines
 ## XXX pylint: disable=missing-docstring

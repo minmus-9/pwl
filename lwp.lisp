@@ -690,6 +690,7 @@
     (list n dt (mul 1e6 (div dt n)) (div n dt))
 )))
 
+;; iterative factorial
 (define ! (lambda (n) ( do
     (define r 1)
     (define c (call/cc (lambda (cc) cc)))
@@ -704,6 +705,5 @@
     )
 )))
 
-(timeit (lambda (i) (! 100)) 10)
 
 ;; EOF
