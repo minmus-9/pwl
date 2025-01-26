@@ -77,12 +77,16 @@
 
 ;; define negation and addition first
 (define neg     (lambda (x) (sub 0 x)))
-(define add2    (lambda (x y) (sub x (neg y))))
-(define add     (lambda (x & args)
+(define add$2   (lambda (x y) (sub x (neg y))))
+
+(special add (lambda (__special_add_x__ & __special_add_args__)
+    (eval (add$ __special_add_x__ __special_add_args__) 1)))
+
+(define add$ (lambda (x args)
     (if
         (null? args)
-        x
-        (eval (join (list (quote add) (add2 x (car args))) (cdr args)))
+        `,x
+        `(add$2 ,x ,(add$ (car args) (cdr args)))
     )
 ))
 
@@ -177,41 +181,6 @@
         ))
 
         (helper l 0)
-)))
-
-;;; definition of let sicp p.87
-(special let (lambda (__special_let_vars__ __special_let_body__) (do
-    ;; (let ((x a) (y b)) body)
-
-    (define __special_let_vdecls__ ())  ;; (x y)
-    (define __special_let_vvals__ ())   ;; ((eval a) (eval b))
-    ;; declare one var
-    (define __special_let_decl1__ (lambda (__special_let_decl1_var__ __special_let_decl1_value__) (do
-        (set! __special_let_vdecls__ (join __special_let_vdecls__ (list __special_let_decl1_var__)))
-        (set! __special_let_vvals__  (join __special_let_vvals__  (list (eval __special_let_decl1_value__))))
-    )))
-    ;; declare the next item from vars
-    (define __special_let_next__ (lambda () (do
-        (__special_let_decl1__ (car (car __special_let_vars__)) (car (cdr (car __special_let_vars__))))
-        (set! __special_let_vars__ (cdr __special_let_vars__))
-    )))
-    ;; declare everthing, then return (doit)
-    (define __special_let_decls__ (lambda ()
-        (if
-            (null? __special_let_vars__)
-            (__special_let_doit__)
-            (do
-                    (__special_let_next__) (__special_let_decls__)
-            )
-        )
-    ))
-    (define __special_let_doit__ (lambda () (do
-        (define __special_let_doit_head__ (join (list (quote lambda)) (list __special_let_vdecls__)))
-        (define __special_let_doit_mid__  (join __special_let_doit_head__ (list __special_let_body__)))
-        (define __special_let_doit_lam__  (join (list __special_let_doit_mid__) __special_let_vvals__))
-        (eval __special_let_doit_lam__)
-    )))
-    (__special_let_decls__)
 )))
 
 (special assert (lambda (__special_assert_sexpr__)
@@ -368,7 +337,7 @@
 )))
 
 ;; save some (eval (join (quote (sym)) args)) awkwardness
-(special eval-flattened (lambda (sym & args) ( do
+(special apply (lambda (sym & args) ( do
     (define lb (list-builder))
     (lb (quote add) sym)
     (define f (lambda (lst) ( do
@@ -380,7 +349,7 @@
         )
     )))
     (foreach f args)
-    (eval (lb (quote get)))
+    (eval (lb (quote get)) 1)
 )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -485,7 +454,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; let*
 
-(special let* (lambda (vdefs body) (eval (let*$ vdefs body))))
+(special let* (lambda (__special_lets_vdefs__ __special_lets_body__)
+    (eval (let*$ __special_lets_vdefs__ __special_lets_body__) 1)))
 
 (define let*$ (lambda (vdefs body) ( do
     (if
@@ -505,7 +475,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; let
 
-(special let (lambda (vdefs body) (eval (let$ vdefs body))))
+(special let (lambda (__special_let_vdefs__ __special_let_body__)
+    (eval (let$ __special_let_vdefs__ __special_let_body__) 1)))
 
 (define let$ (lambda (vdefs body) ( do
     (define vdecls (transpose vdefs))
@@ -531,7 +502,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; def
 
-(special def (lambda (funcargs body) (eval (def$ funcargs body) 1)))
+(special def (lambda (__special_def_funcargs__ & __special_def_body__)
+    (eval (def$ __special_def_funcargs__ __special_def_body__) 1)))
 
 (define def$ (lambda (funcargs body) ( do
     (if (or (not (pair? funcargs)) (null? funcargs))
@@ -539,9 +511,8 @@
         ())
     (define f (car funcargs))
     (define a (cdr funcargs))
-    `(define ,f (lambda (,@a) ,body))
+    `(define ,f (lambda (,@a) (do ,@body)))
 )))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; associative table
@@ -664,7 +635,7 @@
 )))
 
 ;; call f a given number of times as (f counter)
-(define for (lambda (f n) ( do
+(def (for f n)
     (define i 0)
     (define c (call/cc (lambda (cc) cc)))
     (if
@@ -676,7 +647,7 @@
             (c c)
         )
     )
-)))
+)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; benchmarking
@@ -688,21 +659,6 @@
     (if (lt? dt 1e-7) (set! dt 1e-7) ())
     (if (lt? n 1) (set! n 1) ())
     (list n dt (mul 1e6 (div dt n)) (div n dt))
-)))
-
-;; iterative factorial
-(define ! (lambda (n) ( do
-    (define r 1)
-    (define c (call/cc (lambda (cc) cc)))
-    (if
-        (lt? n 2)
-        r
-        ( do
-            (set! r (mul r n))
-            (set! n (sub n 1))
-            (c c)
-        )
-    )
 )))
 
 
