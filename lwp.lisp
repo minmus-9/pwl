@@ -654,12 +654,15 @@
 
 (define timeit (lambda (f n) ( do
     (define t0 (time 'time))
-    (for f n)
-    (define dt (sub (time 'time) t0))
+    (if (gt? n 0) (for f n) ())
+    (define t1 (time 'time))
+    (define dt (sub t1 t0))
     (if (lt? dt 1e-7) (set! dt 1e-7) ())
     (if (lt? n 1) (set! n 1) ())
     (list n dt (mul 1e6 (div dt n)) (div n dt))
 )))
+
+(timeit (lambda (_) (add 2 2)) 0)
 
 
 ;; EOF
