@@ -319,25 +319,8 @@
     dispatch
 )))
 
-(define reverse (lambda (lst) ( do
-    (define r ())
-    (define f (lambda ()
-        (if
-            (null? lst)
-            ()
-            (do
-                (set! r (cons (car lst) r))
-                (set! lst (cdr lst))
-                #t
-            )
-        )
-    ))
-    (while f)
-    r
-)))
-
 ;; save some (eval (join (quote (sym)) args)) awkwardness
-(special apply (lambda (sym & args) ( do
+(special apply* (lambda (sym & args) ( do
     (define lb (list-builder))
     (lb (quote add) sym)
     (define f (lambda (lst) ( do
@@ -348,7 +331,7 @@
             (lb (quote add) x)
         )
     )))
-    (foreach f args)
+    (foreach f args)  ;; lack of tco is killing me :-\
     (eval (lb (quote get)) 1)
 )))
 
@@ -649,20 +632,35 @@
     )
 )
 
+(define reverse (lambda (lst) ( do
+    (define r ())
+    (define f (lambda ()
+        (if
+            (null? lst)
+            ()
+            (do
+                (set! r (cons (car lst) r))
+                (set! lst (cdr lst))
+                #t
+            )
+        )
+    ))
+    (while f)
+    r
+)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; benchmarking
 
-(define timeit (lambda (f n) ( do
+(def (timeit f n)
     (define t0 (time 'time))
-    (if (gt? n 0) (for f n) ())
+    (for f n)
     (define t1 (time 'time))
     (define dt (sub t1 t0))
     (if (lt? dt 1e-7) (set! dt 1e-7) ())
     (if (lt? n 1) (set! n 1) ())
     (list n dt (mul 1e6 (div dt n)) (div n dt))
-)))
-
-(timeit (lambda (_) (add 2 2)) 0)
+)
 
 
 ;; EOF

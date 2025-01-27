@@ -21,7 +21,7 @@
 ;; this file is just for fiddling around
 
 ;; for lwp.py
-(define list? (lambda (x) (pair? x)))
+(define list? pair?)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; playing with quasiquote impl
@@ -62,16 +62,21 @@
     )
 )))
 
+(def (op lb elt) (lb 'add (list elt)))
+((fold-left op (list-builder) (list 1 2 3 4)) 'get)
+
 (define uq (lambda (x) (error "can only uq in qq")))
 (define ux (lambda (x) (error "can only ux in qq")))
 
 ;; this isn't quite working right, i get (correct result) in its own list
-(define y (quote (17 31))) (define x 11) (print (qq (add (sub 0 (uq x)) (ux y) 2)))
-;(print `(add (sub 0 ,x) ,@y 2))
+(define y (quote (17 31))) (define x 11)
+(print (qq (add (sub 0 (uq x)) (ux y) 2)))
+
+(print `(add (sub 0 ,x) ,@y 2))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; continuation based factorial
+;; continuation based factorial, slower than sicp iterative solution
 
 (define ! (lambda (n) ( do
     (define cont ())
@@ -84,8 +89,8 @@
         (#t (cont (sub k 1)))
     )
 )))
-;(print (! 10000))
-(print (! 100))  ;; got sick of waiting every time i run this
+
+(print (! 100))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -96,12 +101,11 @@
         ((lt? x y) (gcd y x))
         ((equal? x 0) 1)
         ((equal? y 0) x)
-        (#t ( do
-            (define z (mod x y))
-            (gcd y z)
-        ))
+        (#t (gcd y (mod x y)))
     )
 ))
+
+(timeit (lambda (_) (gcd 2379728399026437315402 2173491264856982165498)) 4)
 
 (define rat (lambda (x y) ( do
     (define z (gcd x y))
@@ -284,10 +288,11 @@
 
 (define k (kernel))
 (k 'register 'time
-    (lambda (k c args) (c (time.time))))
+    (lambda (k c args) (c (time 'time))))
 (k 'register 'test
     (lambda (k c args) (c (reverse args))))
 
+(k 'call 'time)
 (k 'call 'test 'a 'b 'c)
 
 
