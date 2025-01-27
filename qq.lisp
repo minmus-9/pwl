@@ -15,6 +15,7 @@
 ))
 
 (define list (lambda (& args) args))
+(define noop (lambda (& args) ()))
 
 ;; call f for each element of lst
 (define foreach (lambda (f lst)
@@ -25,7 +26,7 @@
             (eq? lst ())
             ()
             (if
-                (define _ (f (car lst)))
+                (noop (f (car lst)))
                 ()
                 (if
                     (set! lst (cdr lst))
@@ -59,7 +60,7 @@
                     )
                 )
             )
-            dispatch
+            ()
         )))
         (begin$2
             (define dispatch (lambda (op & args)
@@ -67,7 +68,7 @@
                     (eq? op 'add)
                     (if
                         (eq? (cdr args) ())
-                        (add (car args))
+                        (begin$2 (add (car args)) dispatch)
                         (error "add takes a single arg")
                     )
                     (if

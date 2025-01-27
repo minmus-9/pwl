@@ -31,36 +31,212 @@
 (define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
 (define caddddr (lambda (l) (car (cdr (cdr (cdr (cdr l)))))))
 
-;; define do
-(special begin$2 (lambda (__special_begin$2_a__ __special_begin$2_b__)
-     (if  ;; can't remember where i saw this but i like it
-        (eval __special_begin$2_a__ 1)
-        (eval __special_begin$2_b__ 1)
-        (eval __special_begin$2_b__ 1)
-    )
-))
+(define noop (lambda (& args) ()))
 
-(special do (lambda (& __special_do_args__)
-    (eval (do$ __special_do_args__) 1)))
+(define begin$2 (lambda (a b) b))
 
-(define do$ (lambda (__special_do$_args__)
+;; {{{ foreach
+;; call f for each element of lst
+
+(define foreach (lambda (f lst)
     (if
-        (null? __special_do$_args__)
+        (define c (call/cc (lambda (cc) cc)))
         ()
         (if
-            (null? (cdr __special_do$_args__))
-            (car __special_do$_args__)
-            `(begin$2
-                ,(car __special_do$_args__)
-                ,(do$ (cdr __special_do$_args__)))
+            (null? lst)
+            ()
+            (if
+                (noop (f (car lst)))
+                ()
+                (if
+                    (set! lst (cdr lst))
+                    ()
+                    (c c)
+                )
+            )
         )
     )
 ))
 
+;; }}}
+;; {{{ list-builder
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; dingus to build a list by appending in linear time. it's an ad-hoc queue
+
+(define list-builder (lambda () ( begin$2
+    (define ht '(() ()))
+
+    (begin$2
+        (define add (lambda (x)
+            (if
+                (define node (cons x ()))
+                ()
+                (if
+                    (null? (car ht))
+                    (if
+                        (set-car! ht node)
+                        ()
+                        (set-cdr! ht node)
+                    )
+                    (if
+                        (set-cdr! (cdr ht) node)
+                        ()
+                        (set-cdr! ht node)
+                    )
+                )
+            )
+        ))
+
+        (begin$2
+            (define dispatch (lambda (op & args)
+                (if
+                    (eq? op 'add)
+                    (if
+                        (null? (cdr args))
+                        (if
+                            (add (car args))
+                            dispatch
+                            dispatch
+                        )
+                        (error "add takes a single arg")
+                    )
+                    (if
+                        (eq? op 'extend)
+                        (if
+                            (null? (cdr args))
+                            (if
+                                (foreach add (car args))
+                                ()
+                                dispatch
+                            )
+                            (error "extend takes a single list arg")
+                        )
+                        (if
+                            (eq? op 'get)
+                            (car ht)
+                            (error "unknown command")
+                        )
+                    )
+                )
+            ))
+            dispatch
+        )
+    )
+)))
+
+;; }}}
+;; {{{ quasiquoter
+
+(special qq (lambda (form) (qq$body form)))
+
+(define qq$body (lambda (form)
+    (if
+        (pair? form)
+        (car ((qq$list form (list-builder)) 'get))
+        form
+    )
+))
+
+(define qq$guts (lambda (form)
+    (if
+        (pair? form)
+        ((qq$list form (list-builder)) 'get)
+        form
+    )
+))
+
+(define qq$elt (lambda (elt lb)
+    (if
+        (pair? elt)
+        (qq$list elt lb)
+        (lb 'add elt)
+    )
+))
+
+(define qq$list (lambda (form lb)
+    (if
+        (define verb (car form))
+        ()
+        (if
+            (eq? (cdr (cdr form)) ())
+            (if
+                (eq? verb 'quasiquote)
+                (lb 'add (qq$guts (cadr form)))
+                (if
+                    (eq? verb 'unquote)
+                    (lb 'add (eval (cadr form) 0))
+                    (if
+                        (eq? verb 'unquote-splicing)
+                        (lb 'extend (eval (cadr form) 0))
+                        (lb 'add form)
+                    )
+                )
+            )
+            (if
+                (eq? verb 'quasiquote)
+                (error "quasiquote unquote unquote-splicing take a single arg")
+                (if
+                    (eq? verb 'unquote)
+                    (error "quasiquote unquote unquote-splicing take a single arg")
+                    (if
+                        (eq? verb 'unquote-splicing)
+                        (error "quasiquote unquote unquote-splicing take a single arg")
+                        (if
+                            (define lb2 (list-builder))
+                            ()
+                            (if
+                                (define f (lambda (elt) (qq$elt elt lb2)))
+                                ()
+                                (if
+                                    (foreach f form)
+                                    ()
+                                    (lb 'add (lb2 'get))
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+))
+
+(define y (quote (17 31))) (define x 11)
+;(print (qq (add (sub 0 (unquote x)) (unquote-splicing y) 2)))
+;(print (qq (unquote x)))
+;(print (qq x))  ;; blows up with (car) in qq defn
+
+(print `(add (sub 0 ,x) ,@y 2))
+
+;; }}}
+
+(define do (lambda (& args)
+    (if
+        (define c (call/cc (lambda (cc) cc)))
+        ()
+        (if
+            (null? args)
+            ()
+            (if
+                (null? (cdr args))
+                (car args)
+                (if
+                    (set! args (cdr args))
+                    ()
+                    (c c)
+                )
+            )
+        )
+    )
+))
+
+(print "##")
+(do 1 4 9 16 25)
+
 ;; define cond
 
 (special cond (lambda (& __special_cond_pcs__)
-    (eval (cond$ __special_cond_pcs__) 1)))
+    (eval (cond$ __special_cond_pcs__) 0)))
 
 (define cond$ (lambda (__special_cond_pcs__)
     (if
@@ -89,8 +265,6 @@
         `(add$2 ,x ,(add$ (car args) (cdr args)))
     )
 ))
-
-(add 1 2)
 
 ;; oh, and mod
 (define mod     (lambda (n d) (sub n (mul d (div n d)))))
@@ -272,86 +446,6 @@
 (define map (lambda (f & lists) (do
     (define g (lambda (tuple) (eval (join (quote (f)) tuple))))
     (map1 g (transpose lists))
-)))
-
-;; call f for each element of lst
-(define foreach (lambda (f lst) ( do
-    (define c (call/cc (lambda (cc) cc)))
-    (if
-        (null? lst)
-        ()
-        ( do
-            (f (car lst))
-            (set! lst (cdr lst))
-            (c c)
-        )
-    )
-)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; dingus to build a list by appending in linear time. it's an ad-hoc queue
-
-(define list-builder (lambda () ( begin$2
-    (define ht (list () ()))
-
-    (begin$2
-        (define get (lambda () (car ht)))
-
-        (begin$2
-            (define add (lambda (x) ( begin$2
-                (if
-                    (define node (cons x ()))
-                    ()
-                    (if
-                        (null? (car ht))
-                        (if
-                            (set-car! ht node)
-                            ()
-                            (set-cdr! ht node)
-                        )
-                        (if
-                            (set-cdr! (cdr ht) node)
-                            ()
-                            (set-cdr! ht node)
-                        )
-                    )
-                )
-                dispatch
-            )))
-
-            (begin$2
-                (define dispatch (lambda (op & args)
-                    (if
-                        (eq? op 'add)
-                        (if
-                            (equal? (length args) 1)
-                            (add (car args))
-                            (error "add takes a single arg")
-                        )
-                        (if
-                            (eq? op 'extend)
-                            (if
-                                (equal? (length args) 1)
-                                (if
-                                    (foreach add (car args))
-                                    ()
-                                    dispatch
-                                )
-                                (error "extend takes a single list arg")
-                            )
-                            (if
-                                (eq? op 'get)
-                                (car ht)
-                                (error "unknown command")
-                            )
-                        )
-                    )
-                ))
-
-                dispatch
-            )
-        )
-    )
 )))
 
 ;; save some (eval (join (quote (sym)) args)) awkwardness

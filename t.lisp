@@ -157,7 +157,7 @@
 (define kentry (lambda () ( do
     (define z (call/cc (lambda (cc) cc)))
     (cond
-        ((list? z) (kexec z))
+        ((pair? z) (kexec z))
         (#t z)
     )
 )))
@@ -195,7 +195,7 @@
     (define kentry (lambda () ( do
         (define kc (call/cc (lambda (cc) cc)))
         (cond
-            ((list? kc) (kexec kc))
+            ((pair? kc) (kexec kc))
             (#t kc)
         )
     )))
