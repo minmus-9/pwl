@@ -90,11 +90,18 @@
                 (if
                     (eq? verb 'unquote-splicing)
                     (error "quasiquote unquote unquote-splicing take a single arg")
-                    (do
+                    (if
                         (define lb2 (list-builder))
-                        (define f (lambda (elt) (qq$elt elt lb2)))
-                        (foreach f form)
-                        (lb 'add (lb2 'get))
+                        ()
+                        (if
+                            (define f (lambda (elt) (qq$elt elt lb2)))
+                            ()
+                            (if
+                                (foreach f form)
+                                ()
+                                (lb 'add (lb2 'get))
+                            )
+                        )
                     )
                 )
             )
