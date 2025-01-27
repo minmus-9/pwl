@@ -434,6 +434,7 @@ class Environment:
         self.bind(params, args)
 
     def bind(self, params, args):
+        p, a = params, args
         rpn = self.g.rpn
         variadic = False
         while not rpn.is_empty_list(params):
@@ -452,14 +453,14 @@ class Environment:
                 self.set(p, args)
                 return
             elif rpn.is_empty_list(args):
-                raise SyntaxError("not enough args")
+                raise SyntaxError(f"not enough args {p!r} {a!r}")
             else:
                 self.set(p, rpn.car(args))
                 args = rpn.cdr(args)
         if variadic:
             raise SyntaxError("args end with '&'")
         if not rpn.is_empty_list(args):
-            raise SyntaxError("too many args")
+            raise SyntaxError(f"too many args {p!r} {a!r}")
 
     def get_data_structure(self):
         p = self.parent()
@@ -1313,6 +1314,7 @@ class LispOperators(Operators):
 
     @glbl(">string")
     def op_to_string(self, g, frame):
+        ## pylint: disable=no-self-use
         (x,) = g.unpack(frame.x, 1)
         return bounce(g.stringify_, g, Frame(frame, x=x))
 
@@ -1647,6 +1649,8 @@ def main(force_repl=False, lisp=None, lisp_class=None):
     def callback(sexpr):
         try:
             value = g.eval(sexpr)
+        except SystemExit:
+            raise
         except:
             print("Offender (pyth):", sexpr)
             print("Offender (lisp):", g.stringify(sexpr), "\n")
