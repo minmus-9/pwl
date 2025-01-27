@@ -36,7 +36,7 @@
     )
 ))
 
-(define qq$elt (lambda (lb elt)
+(define qq$elt (lambda (elt lb)
     (cond
         ((eq? elt ()) (lb (quote add) elt))
         ((list? elt) (qq$list lb elt))
@@ -62,15 +62,13 @@
     )
 )))
 
-(def (op lb elt) (lb 'add (list elt)))
-((fold-left op (list-builder) (list 1 2 3 4)) 'get)
-
 (define uq (lambda (x) (error "can only uq in qq")))
 (define ux (lambda (x) (error "can only ux in qq")))
 
 ;; this isn't quite working right, i get (correct result) in its own list
 (define y (quote (17 31))) (define x 11)
 (print (qq (add (sub 0 (uq x)) (ux y) 2)))
+(print (qq (uq x)))
 
 (print `(add (sub 0 ,x) ,@y 2))
 

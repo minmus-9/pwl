@@ -57,6 +57,8 @@
     )
 ))
 
+(do 1 2 3 4)
+
 ;; define cond
 
 (special cond (lambda (& __special_cond_pcs__)
@@ -216,6 +218,7 @@
     if
         (null? sequence)
         initial
+        ;; it's (f elt res) here...
         (f (car sequence) (accumulate f initial (cdr sequence)))
 )))
 
@@ -223,9 +226,25 @@
     (define iter (lambda (result rest) (
         if (null? rest)
             result
+            ;; ... but (f res elt) here. why? ...
             (iter (op result (car rest)) (cdr rest))
     )))
     (iter initial sequence)
+)))
+
+(define fold-left (lambda (f initial sequence) ( do ;; iterative version for no-tco case
+    (define value initial)
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (null? sequence)
+        value
+        ( do
+            ;; ... i prefer (f elt res)
+            (set! value (f (car sequence) value))
+            (set! sequence (cdr sequence))
+            (c c)
+        )
+    )
 )))
 
 (define map1 (lambda (f lst)
