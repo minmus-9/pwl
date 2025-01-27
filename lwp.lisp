@@ -90,6 +90,8 @@
     )
 ))
 
+(add 1 2)
+
 ;; oh, and mod
 (define mod     (lambda (n d) (sub n (mul d (div n d)))))
 
@@ -320,14 +322,14 @@
             (begin$2
                 (define dispatch (lambda (op & args)
                     (if
-                        (eq? op (quote add))
+                        (eq? op 'add)
                         (if
                             (equal? (length args) 1)
                             (add (car args))
                             (error "add takes a single arg")
                         )
                         (if
-                            (eq? op (quote extend))
+                            (eq? op 'extend)
                             (if
                                 (equal? (length args) 1)
                                 (if
@@ -338,7 +340,7 @@
                                 (error "extend takes a single list arg")
                             )
                             (if
-                                (eq? op (quote get))
+                                (eq? op 'get)
                                 (car ht)
                                 (error "unknown command")
                             )
