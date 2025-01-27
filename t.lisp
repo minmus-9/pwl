@@ -64,42 +64,45 @@
     )
 ))
 
-(define qq$list (lambda (form lb) ( do
-    (define verb (car form))
+(define qq$list (lambda (form lb)
     (if
-        (equal? (length form) 2)
+        (define verb (car form))
+        ()
         (if
-            (eq? verb 'quasiquote)
-            (lb 'add (qq$guts (cadr form)))
+            (equal? (length form) 2)
             (if
-                (eq? verb 'unquote)
-                (lb 'add (eval (cadr form)))
+                (eq? verb 'quasiquote)
+                (lb 'add (qq$guts (cadr form)))
                 (if
-                    (eq? verb 'unquote-splicing)
-                    (lb 'extend (eval (cadr form)))
-                    (lb 'add form)
+                    (eq? verb 'unquote)
+                    (lb 'add (eval (cadr form)))
+                    (if
+                        (eq? verb 'unquote-splicing)
+                        (lb 'extend (eval (cadr form)))
+                        (lb 'add form)
+                    )
                 )
             )
-        )
-        (if
-            (eq? verb 'quasiquote)
-            (error "quasiquote unquote unquote-splicing take a single arg")
             (if
-                (eq? verb 'unquote)
+                (eq? verb 'quasiquote)
                 (error "quasiquote unquote unquote-splicing take a single arg")
                 (if
-                    (eq? verb 'unquote-splicing)
+                    (eq? verb 'unquote)
                     (error "quasiquote unquote unquote-splicing take a single arg")
                     (if
-                        (define lb2 (list-builder))
-                        ()
+                        (eq? verb 'unquote-splicing)
+                        (error "quasiquote unquote unquote-splicing take a single arg")
                         (if
-                            (define f (lambda (elt) (qq$elt elt lb2)))
+                            (define lb2 (list-builder))
                             ()
                             (if
-                                (foreach f form)
+                                (define f (lambda (elt) (qq$elt elt lb2)))
                                 ()
-                                (lb 'add (lb2 'get))
+                                (if
+                                    (foreach f form)
+                                    ()
+                                    (lb 'add (lb2 'get))
+                                )
                             )
                         )
                     )
@@ -107,7 +110,7 @@
             )
         )
     )
-)))
+))
 
 (define y (quote (17 31))) (define x 11)
 (print (qq (add (sub 0 (unquote x)) (unquote-splicing y) 2)))

@@ -289,51 +289,67 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; dingus to build a list by appending in linear time. it's an ad-hoc queue
 
-(define list-builder (lambda () ( do
+(define list-builder (lambda () ( begin$2
     (define ht (list () ()))
 
-    (define get (lambda () (car ht)))
+    (begin$2
+        (define get (lambda () (car ht)))
 
-    (define add (lambda (x) ( do
-        (define node (cons x ()))
-        (if
-            (null? (car ht))
-            ( do
-                (set-car! ht node)
-                (set-cdr! ht node)
-            )
-            (do
-                (set-cdr! (cdr ht) node)
-                (set-cdr! ht node)
-            )
-        )
-        dispatch
-    )))
-
-    (define dispatch (lambda (op & args)
-        (cond
-            ((eq? op (quote add))
+        (begin$2
+            (define add (lambda (x) ( begin$2
                 (if
-                    (equal? (length args) 1)
-                    (add (car args))
-                    (error "add takes a single arg")
-                )
-            )
-            ((eq? op (quote extend))
-                (if
-                    (equal? (length args) 1)
-                    ( do
-                        (foreach add (car args))
-                        dispatch
+                    (define node (cons x ()))
+                    ()
+                    (if
+                        (null? (car ht))
+                        (if
+                            (set-car! ht node)
+                            ()
+                            (set-cdr! ht node)
+                        )
+                        (if
+                            (set-cdr! (cdr ht) node)
+                            ()
+                            (set-cdr! ht node)
+                        )
                     )
-                    (error "extend takes a single list arg")
                 )
-            )
-            ((eq? op (quote get)) (car ht))
-        )
-    ))
+                dispatch
+            )))
 
-    dispatch
+            (begin$2
+                (define dispatch (lambda (op & args)
+                    (if
+                        (eq? op (quote add))
+                        (if
+                            (equal? (length args) 1)
+                            (add (car args))
+                            (error "add takes a single arg")
+                        )
+                        (if
+                            (eq? op (quote extend))
+                            (if
+                                (equal? (length args) 1)
+                                (if
+                                    (foreach add (car args))
+                                    ()
+                                    dispatch
+                                )
+                                (error "extend takes a single list arg")
+                            )
+                            (if
+                                (eq? op (quote get))
+                                (car ht)
+                                (error "unknown command")
+                            )
+                        )
+                    )
+                ))
+
+                dispatch
+            )
+        )
+    )
 )))
 
 ;; save some (eval (join (quote (sym)) args)) awkwardness
