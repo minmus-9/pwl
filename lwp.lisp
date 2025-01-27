@@ -57,8 +57,6 @@
     )
 ))
 
-(do 1 2 3 4)
-
 ;; define cond
 
 (special cond (lambda (& __special_cond_pcs__)
