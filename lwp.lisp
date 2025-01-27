@@ -24,6 +24,7 @@
 ;; used everywhere
 (define null? (lambda (x) (if (eq? x ()) #t ())))
 (define pair? (lambda (x) (if (eq? (type x) 'pair) #t ())))
+(define list  (lambda (& args) args))
 
 ;; ditto
 (define cadr (lambda (l) (car (cdr l))))
@@ -31,101 +32,96 @@
 (define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
 (define caddddr (lambda (l) (car (cdr (cdr (cdr (cdr l)))))))
 
-(define noop (lambda (& args) ()))
+;; {{{ do
 
-(define begin$2 (lambda (a b) b))
-
-;; {{{ foreach
-;; call f for each element of lst
-
-(define foreach (lambda (f lst)
-    (if
-        (define c (call/cc (lambda (cc) cc)))
-        ()
-        (if
-            (null? lst)
+(define do (lambda (& args)
+    ((lambda (c)
+       (if
+            (null? args)
             ()
             (if
-                (noop (f (car lst)))
-                ()
+                (null? (cdr args))
+                (car args)
                 (if
-                    (set! lst (cdr lst))
+                    (set! args (cdr args))
                     ()
                     (c c)
                 )
             )
         )
-    )
+    ) (call/cc (lambda (cc) cc)))
 ))
+
+;; }}}
+;; {{{ foreach
+;; call f for each element of lst
+
+(define foreach (lambda (f lst) ( do
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (null? lst)
+        ()
+        ( do
+            (f (car lst))
+            (set! lst (cdr lst))
+            (c c)
+        )
+    )
+)))
 
 ;; }}}
 ;; {{{ list-builder
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; dingus to build a list by appending in linear time. it's an ad-hoc queue
 
-(define list-builder (lambda () ( begin$2
+(define list-builder (lambda () ( do
     (define ht '(() ()))
-
-    (begin$2
-        (define add (lambda (x)
+    (define add (lambda (x) ( do
+        (define node (cons x ()))
+        (if
+            (null? (car ht))
+            ( do
+                (set-car! ht node)
+                (set-cdr! ht node)
+            )
+            ( do
+                (set-cdr! (cdr ht) node)
+                (set-cdr! ht node)
+            )
+        )
+        dispatch
+    )))
+    (define dispatch (lambda (op & args)
+        (if
+            (eq? op 'add)
             (if
-                (define node (cons x ()))
-                ()
+                (null? (cdr args))
+                (add (car args))
+                (error "add takes a single arg")
+            )
+            (if
+                (eq? op 'extend)
                 (if
-                    (null? (car ht))
-                    (if
-                        (set-car! ht node)
-                        ()
-                        (set-cdr! ht node)
+                    (null? (cdr args))
+                    ( do
+                        (foreach add (car args))
+                        dispatch
                     )
-                    (if
-                        (set-cdr! (cdr ht) node)
-                        ()
-                        (set-cdr! ht node)
-                    )
+                    (error "extend takes a single list arg")
+                )
+                (if
+                    (eq? op 'get)
+                    (car ht)
+                    (error "unknown command")
                 )
             )
-        ))
-
-        (begin$2
-            (define dispatch (lambda (op & args)
-                (if
-                    (eq? op 'add)
-                    (if
-                        (null? (cdr args))
-                        (if
-                            (add (car args))
-                            dispatch
-                            dispatch
-                        )
-                        (error "add takes a single arg")
-                    )
-                    (if
-                        (eq? op 'extend)
-                        (if
-                            (null? (cdr args))
-                            (if
-                                (foreach add (car args))
-                                ()
-                                dispatch
-                            )
-                            (error "extend takes a single list arg")
-                        )
-                        (if
-                            (eq? op 'get)
-                            (car ht)
-                            (error "unknown command")
-                        )
-                    )
-                )
-            ))
-            dispatch
         )
-    )
+    ))
+    dispatch
 )))
 
 ;; }}}
-;; {{{ quasiquoter
+;; {{{ broken quasiquoter
 
 (special qq (lambda (form) (qq$body form)))
 
@@ -209,34 +205,31 @@
 (print `(add (sub 0 ,x) ,@y 2))
 
 ;; }}}
+;; {{{ def
 
-(define do (lambda (& args)
+(special def (lambda (__special_def_funcargs__ & __special_def_body__)
+    (eval (def$ __special_def_funcargs__ __special_def_body__) 1)))
+
+(define def$ (lambda (funcargs body) ( do
     (if
-        (define c (call/cc (lambda (cc) cc)))
-        ()
+        (pair? funcargs)
         (if
-            (null? args)
+            (null? funcargs)
+            (error "def needs a func to define!")
             ()
-            (if
-                (null? (cdr args))
-                (car args)
-                (if
-                    (set! args (cdr args))
-                    ()
-                    (c c)
-                )
-            )
         )
+        (error "def needs a func to define!")
     )
-))
+    (define f (car funcargs))
+    (define a (cdr funcargs))
+    `(define ,f (lambda (,@a) (do ,@body)))
+)))
 
-(print "##")
-(do 1 4 9 16 25)
-
-;; define cond
+;; }}}
+;; {{{ cond
 
 (special cond (lambda (& __special_cond_pcs__)
-    (eval (cond$ __special_cond_pcs__) 0)))
+    (eval (cond$ __special_cond_pcs__) 1)))
 
 (define cond$ (lambda (__special_cond_pcs__)
     (if
@@ -249,123 +242,60 @@
     )
 ))
 
-;; here we go
+;; }}}
+;; {{{ arithmetic
 
-;; define negation and addition first
-(define neg     (lambda (x) (sub 0 x)))
-(define add$2   (lambda (x y) (sub x (neg y))))
+(def (neg x) (sub 0 x))
+(def (add$2 x y) (sub x (neg y)))
 
 (special add (lambda (__special_add_x__ & __special_add_args__)
     (eval (add$ __special_add_x__ __special_add_args__) 1)))
 
-(define add$ (lambda (x args)
+(def (add$ x args)
     (if
         (null? args)
         `,x
         `(add$2 ,x ,(add$ (car args) (cdr args)))
     )
-))
+)
 
 ;; oh, and mod
-(define mod     (lambda (n d) (sub n (mul d (div n d)))))
+(def (mod n d) (sub n (mul d (div n d))))
 
 ;; absolute value
-(define abs (lambda (x)
+(def (abs x)
     (if
         (lt? x 0)
         (neg x)
         x
     )
-))
+)
 
 ;; copysign
-(define copysign (lambda (x y)
+(def (copysign x y)
     (if
         (lt? y 0)
         (neg (abs x))
         (abs x)
-)))
-
-;; some comparison predicates
-(define le? (lambda (x y) (or (lt? x y) (equal? x y))))
-(define ge? (lambda (x y) (not (lt? x y))))
-(define gt? (lambda (x y) (not (le? x y))))
-
-;; bitwise ops from nand
-(define bnot    (lambda (x) (nand x x)))
-(define band    (lambda (x y) (bnot (nand x y))))
-(define bor     (lambda (x y) (nand (bnot x) (bnot y))))
-(define bxor    (lambda (x y) (band (nand x y) (bor x y))))
+    )
+)
 
 ;; (signed) shifts
-(define lshift  (lambda (x n) (
-    cond
+(def (lshift x n)
+    (cond
         ((equal? n 0)   x)
         ((equal? n 1)   (add x x))
         (#t             (lshift (lshift x (sub n 1)) 1))
-)))
+    )
+)
 
-(define rshift  (lambda (x n) (
-    cond
+(def (rshift x n)
+    (cond
         ((equal? n 0)   x)
         ((equal? n 1)   (div x 2))
         (#t             (rshift (rshift x (sub n 1)) 1))
-)))
-
-(define list    (lambda (& args) args))
-
-(define bool (lambda (x) (if x #t ())))
-
-;; and or not
-
-(special and (lambda (& __special_and_args__) (
-    cond
-        ((null? __special_and_args__) ())
-        ((null? (cdr __special_and_args__))
-            (eval (car __special_and_args__)))
-        ((eval (car __special_and_args__)) 
-             (eval (join (quote (and)) (cdr __special_and_args__))))
-        (#t ())
-)))
-
-(special or (lambda (& __special_or_args__) (
-    cond
-        ((null? __special_or_args__) ())
-        ((eval (car __special_or_args__))  #t)
-        (#t (eval (join (quote (or)) (cdr __special_or_args__))))
-)))
-
-(define not (lambda (x) (if x () #t)))
-
-;;
-
-(define join (lambda (x y)
-    (if
-        (null? x)
-        y
-        (cons (car x) (join (cdr x) y))
     )
-))
-
-(define length (lambda (l) (do
-        (define helper (lambda (l n)
-            (if
-                (null? l)
-                n
-                (helper (cdr l) (add n 1))
-            )
-        ))
-
-        (helper l 0)
-)))
-
-(special assert (lambda (__special_assert_sexpr__)
-    (if
-        (eval __special_assert_sexpr__)
-        ()
-        (error (>string __special_assert_sexpr__))
-    )
-))
+)
 
 ;; signed integer multiplication from subtraction and right shift (division)
 (define smul (lambda (x y) (do
@@ -386,48 +316,154 @@
     )
 )))
 
+;; }}}
+;; {{{ bitwise ops
 
-;; sicp p.158-165
-(define accumulate (lambda (f initial sequence) (
-    if
-        (null? sequence)
-        initial
-        ;; it's (f elt res) here...
-        (f (car sequence) (accumulate f initial (cdr sequence)))
-)))
+;; bitwise ops from nand
+(def (bnot x)   (nand x x))
+(def (band x y) (bnot (nand x y)))
+(def (bor  x y) (nand (bnot x) (bnot y)))
+(def (bxor x y) (band (nand x y) (bor x y)))
 
-(define fold-left (lambda (op initial sequence) ( do
-    (define iter (lambda (result rest) (
-        if (null? rest)
-            result
-            ;; ... but (f res elt) here. why? ...
-            (iter (op result (car rest)) (cdr rest))
-    )))
-    (iter initial sequence)
-)))
+;; }}}
+;; {{{ comparison predicates
 
-(define fold-left (lambda (f initial sequence) ( do ;; iterative version for no-tco case
-    (define value initial)
+(def (le? x y) (if (lt? x y) #t (if (equal? x y) #t ())))
+(def (ge? x y) (not (lt? x y)))
+(def (gt? x y) (lt? y x))
+
+;; }}}
+;; {{{ and or not
+
+(special and (lambda (& __special_and_args__)
+    ((lambda (c)
+        (cond
+            ((null? __special_and_args__) ())
+            ((null? (cdr __special_and_args__))
+                (eval (car __special_and_args__)))
+            ((eval (car __special_and_args__)) ( do
+                (set! __special_and_args__ (cdr __special_and_args__))
+                (c c)
+            ))
+            (#t ())
+        )
+    ) (call/cc (lambda (cc) cc)) )
+))
+
+(special or (lambda (& __special_or_args__)
+    ((lambda (c)
+        (cond
+            ((null? __special_or_args__) ())
+            ((eval (car __special_or_args__)) #t)
+            (#t ( do
+                (set! __special_or_args__ (cdr __special_or_args__))
+                (c c)
+            ))
+        )
+    ) (call/cc (lambda (cc) cc)) )
+))
+
+(def (not x) (if (eq? x ()) #t ()))
+
+;; }}}
+
+(define join (lambda (x y)
+    (if
+        (null? x)
+        y
+        (cons (car x) (join (cdr x) y))
+    )
+))
+
+(def (joinx x y)
+    (define lb (list-builder))
+    (if
+        (null? x)
+        y
+        (if
+            (null? y)
+            x
+            ( do
+                (lb 'extend x)
+                (lb 'extend y)
+                (lb 'get)
+            )
+        )
+    )
+)
+
+(join (list 1 2 3) (list 4 5))
+
+(def (length l)
+    (define n 0)
     (define c (call/cc (lambda (cc) cc)))
     (if
-        (null? sequence)
-        value
+        (null? l)
+        n
         ( do
-            ;; ... i prefer (f elt res)
-            (set! value (f (car sequence) value))
-            (set! sequence (cdr sequence))
+            (set! n (add n 1))
+            (set! l (cdr l))
             (c c)
         )
     )
-)))
+)
 
-(define map1 (lambda (f lst)
+(length (list 1 4 9 16))
+
+(special assert (lambda (__special_assert_sexpr__)
     (if
-        (null? lst)
+        (eval __special_assert_sexpr__)
         ()
-        (cons (f (car lst)) (map1 f (cdr lst)))
+        (error (>string __special_assert_sexpr__))
     )
 ))
+
+
+(def (reverse l)
+    (define r ())
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (null? l)
+        r
+        ( do
+            (set! r (cons (car l) r))
+            (set! l (cdr l))
+            (c c)
+        )
+    )
+)
+
+;; sicp p.158-165 with interface tweaks
+(def (accumulate f initial sequence)
+    (define r initial)
+    (foreach (lambda (elt) (set! r (f elt r))) (reverse sequence))
+    r
+)
+
+(def (fold-left f initial sequence)
+    (define r initial)
+    (foreach (lambda (elt) (set! r (f elt r))) sequence)
+    r
+)
+
+(accumulate cons () (list 1 9 25))  ;; (1 9 25)
+(fold-left cons () (list 1 9 25))   ;; (25 9 1)
+(exit 0)
+
+(def (map1 f lst)
+    (define l (reverse lst))
+    (define r ())
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (null? l)
+        r
+        ( do
+            (set! r (cons (f (car l)) r))
+            (set! l(cdr l))
+            (c c)
+        )
+    )
+)
 
 (define accumulate-n (lambda (f initial sequences) (
     if
@@ -444,25 +480,20 @@
 )))
 
 (define map (lambda (f & lists) (do
-    (define g (lambda (tuple) (eval (join (quote (f)) tuple))))
+    (def (g tuple) (apply f tuple))
     (map1 g (transpose lists))
 )))
 
+
 ;; save some (eval (join (quote (sym)) args)) awkwardness
-(special apply* (lambda (sym & args) ( do
-    (define lb (list-builder))
-    (lb (quote add) sym)
-    (define f (lambda (lst) ( do
-        (define x (eval lst))
-        (if
-            (pair? x)
-            (lb (quote extend) x)
-            (lb (quote add) x)
-        )
-    )))
-    (foreach f args)  ;; lack of tco is killing me :-\
-    (eval (lb (quote get)) 1)
+
+(define apply (lambda (sym args) ( do
+    (eval (cons sym args))
 )))
+
+(apply add (list 1 2 3))
+
+(print (map list (list 1 2 3) (list 4 5 6) (list 7 8 9)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; it's still python-thinking today :D
@@ -611,20 +642,6 @@
     ) (call/cc (lambda (cc) cc)) )
 ))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; def
-
-(special def (lambda (__special_def_funcargs__ & __special_def_body__)
-    (eval (def$ __special_def_funcargs__ __special_def_body__) 1)))
-
-(define def$ (lambda (funcargs body) ( do
-    (if (or (not (pair? funcargs)) (null? funcargs))
-        (error "def needs a func to define!")
-        ())
-    (define f (car funcargs))
-    (define a (cdr funcargs))
-    `(define ,f (lambda (,@a) (do ,@body)))
-)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; associative table
