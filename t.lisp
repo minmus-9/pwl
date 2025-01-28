@@ -20,23 +20,6 @@
 ;;
 ;; this file is just for fiddling around
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; continuation based factorial, slower than sicp iterative solution
-
-(define ! (lambda (n) ( do
-    (define cont ())
-    (define n! 1)
-    (define k (call/cc (lambda (cc) (do (set! cont cc) n))))
-    (set! n! (mul n! k))
-    (cond
-        ((equal? n! 0) 1)  ;; 0! is usally treated as 1
-        ((lt? k 2) n!)
-        (#t (cont (sub k 1)))
-    )
-)))
-
-(print (! 100))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; rational number arithmetic
@@ -249,7 +232,7 @@
         (define n! 1)
         ()
         ((lambda (c _ _)                ;; huh. gotta love it!
-            (if (lt? n 1) n! (c c)))
+            (if (lt? n 1) n! (c c)))    ;; misleading formatting++
             (call/cc (lambda (cc) cc))
             (set! n! (mul n! n))
             (set! n (sub n 1))
@@ -286,16 +269,76 @@
      n!
 )
 
-(timeit (lambda (_) ()) 10)
-;; for 100!
-;; !1  48ms
-;; !2 115ms
-;; !3  48ms
-;; !4 736ms
-(timeit (lambda (_) (!1 40)) 10)
-(timeit (lambda (_) (!2 40)) 10)
-(timeit (lambda (_) (!3 40)) 10)
-(timeit (lambda (_) (!4 40)) 10)
+(def (!5 n)
+    (define cont ())
+    (define n! 1)
+    (define k (call/cc (lambda (cc) (do (set! cont cc) n))))
+    (set! n! (mul n! k))
+    (cond
+        ((lt? n 1) 1)
+        ((lt? k 2) n!)
+        (#t (cont (sub k 1)))
+    )
+)
+
+(def (!6 n)
+    (def (iter n! k)
+        (if
+            (lt? k 2)
+            n!
+            (iter (mul n! k) (sub k 1))
+        )
+    )
+    (iter 1 n)
+)
+
+(def (!7 n)
+     (math 'factorial n)
+)
+
+(def (xrange start stop step)
+    (define i (sub start step))
+    (def (next)
+        (if
+            (ge? i stop)
+            ()
+            ( do
+                (set! i (add i step))
+                i
+            )
+        )
+    )
+    next
+)
+
+(def (!8 n)
+    (fold-left mul 2 (range 3 (add n 1) 1))
+)
+
+;; (lambda (_) ()) 7ms
+;; for 100!, minus 7ms:
+;;      !1  42ms
+;;      !2 106ms
+;;      !3  42ms
+;;      !4 256ms
+;;      !5 303ms
+;;      !6 115ms
+;;      !7  <2ms
+;;      !8  64ms
+(def (!bench)
+    (define reps 5)
+    (define n 10)
+    (print 'nil (timeit (lambda (_) ()) 10))
+    (print '!1  (timeit (lambda (_) (!1 n)) reps))
+    (print '!2  (timeit (lambda (_) (!2 n)) reps))
+    (print '!3  (timeit (lambda (_) (!3 n)) reps))
+    (print '!4  (timeit (lambda (_) (!4 n)) reps))
+    (print '!5  (timeit (lambda (_) (!5 n)) reps))
+    (print '!6  (timeit (lambda (_) (!6 n)) reps))
+    (print '!7  (timeit (lambda (_) (!7 n)) reps))
+    (print '!8  (timeit (lambda (_) (!8 n)) reps))
+)
+(!bench)
 
 ;; }}}
 
