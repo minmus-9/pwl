@@ -64,7 +64,7 @@
     (if
         (define n! 1)
         ()
-        ((lambda (c _ _)                ;; huh.
+        ((lambda (c _ _)                ;; huh. gotta love it!
             (if (lt? n 1) n! (c c)))
             (call/cc (lambda (cc) cc))
             (set! n! (mul n! n))
