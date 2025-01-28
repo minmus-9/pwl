@@ -712,14 +712,14 @@
 ;; {{{ looping: loop, while, until, for
 
 ;; call f in a loop forever
-(define loop (lambda (f) ( do
+(def (loop f)
     (define c (call/cc (lambda (cc) cc)))
     (f)
     (c c)
-)))
+)
 
 ;; loop while f returns true
-(define while (lambda (f) ( do
+(def (while f)
     (define c ())
     (define flag (call/cc (lambda (cc) (do (set! c cc) #t))))
     (if
@@ -727,10 +727,10 @@
         (c (f))
         ()
     )
-)))
+)
 
 ;; loop until f returns true
-(define until (lambda (f) ( do
+(def (until f)
     (define c ())
     (define flag (call/cc (lambda (cc) (do (set! c cc) ()))))
     (if
@@ -738,7 +738,7 @@
         ()
         (c (f))
     )
-)))
+)
 
 ;; call f a given number of times as (f counter)
 (def (for f n)
