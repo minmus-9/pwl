@@ -90,6 +90,18 @@ def go():
         return x + 17
 
     print(lisp.execute("(test 23)"))
+
+    @lisp.glbl("test2")
+    def j(g, frame):
+        (break_,) = lisp.unpack(frame.x, 1)
+        print("in j")
+        ## to break from loop-with-break
+        return bounce(lisp.eval_, g, lisp.Frame(frame, x=break_))
+        ## normal return will keep looping below
+        return bounce(frame.c, g, g.rpn.EL)
+
+    print(lisp.execute("(loop-with-break test2)"))
+
     print("OK")
 
 

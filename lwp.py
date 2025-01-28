@@ -27,10 +27,10 @@ class LispError(Exception):
 def trampoline(func, *args):
     while True:
         result = func(*args)
-        assert isinstance(result, tuple) and tuple
+        assert isinstance(result, tuple) and tuple, result
         if len(result) == 1:
             return result[0]
-        assert len(result) == 2
+        assert len(result) == 2, result
         func, args = result
 
 
@@ -1715,6 +1715,22 @@ def main(force_repl=False, lisp=None, lisp_class=None):
 
 class Lisp(Globals):
     OPERATOR_CLASS = LispOperators
+
+    bounce = staticmethod(bounce)
+    land = staticmethod(land)
+
+    error = LispError = LispError
+
+    Stack = Stack
+    Frame = Frame
+    FrameStack = FrameStack
+    Queue = Queue
+    KeyedTable = KeyedTable
+    SymbolTable = SymbolTable
+    Environment = Environment
+    Lambda = Lambda
+    Continuation = Continuation
+
 
     def __init__(
         self,
