@@ -1726,7 +1726,7 @@ class Lisp(Globals):
         super().__init__(operator_class, representation, representation_class)
 
     def call(self, obj, *args):
-        if not self.rpn.is_symbol(obj):
+        if self.rpn.is_string(obj):
             obj = self.symbol(obj)
         sexpr = self.py_value_to_lisp_value([obj] + list(args))
         return self.lisp_value_to_py_value(self.eval(sexpr))

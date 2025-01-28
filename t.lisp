@@ -1,4 +1,4 @@
-;; t - test code
+;; t.lisp - test code
 ;;
 ;; pwl - python with lisp, a collection of lisp evaluators for Python
 ;;       https://github.com/minmus-9/pwl
