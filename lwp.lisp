@@ -701,6 +701,22 @@
 )
 
 ;; }}}
+;; {{{ iterate (compose with itself) a function
+
+(def (iter-func f x0 n)
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (lt? n 1)
+        x0
+        (do
+            (set! x0 (f x0))
+            (set! n (sub n 1))
+            (c c)
+        )
+    )
+)
+
+;; }}}
 ;; {{{ benchmarking
 
 (def (timeit f n)

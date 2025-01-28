@@ -115,14 +115,18 @@ class Representation:
         return isinstance(x, self.Pair)
 
     def car(self, x):
-        if not self.is_pair(x):
-            raise TypeError(f"expected pair, got {x!r}")
-        return x.car()
+        ## pylint: disable=no-self-use
+        try:
+            return x.car()
+        except AttributeError:
+            raise TypeError(f"expected pair, got {x!r}") from None
 
     def cdr(self, x):
-        if not self.is_pair(x):
-            raise TypeError(f"expected pair, got {x!r}")
-        return x.cdr()
+        ## pylint: disable=no-self-use
+        try:
+            return x.cdr()
+        except AttributeError:
+            raise TypeError(f"expected pair, got {x!r}") from None
 
     def cons(self, x, y):
         return self.Pair(self, x, y)
@@ -218,10 +222,12 @@ class Stack:
         return self.rpn.is_empty_list(self.stack)
 
     def pop(self):
-        if self.rpn.is_empty_list(self.stack):
+        rpn = self.rpn
+        stk = self.stack
+        if rpn.is_empty_list(stk):
             raise ValueError("stack is empty")
-        ret = self.rpn.car(self.stack)
-        self.stack = self.rpn.cdr(self.stack)
+        ret = rpn.car(stk)
+        self.stack = rpn.cdr(stk)
         return ret
 
     def push(self, x):
@@ -324,11 +330,6 @@ class KeyedTable(dict):  ## XXX
         del self[key]
         return self.rpn.EL
 
-    def get(
-        self, key, default=SENTINEL
-    ):  ## pylint: disable=useless-super-delegation
-        return super().get(key, default)
-
     def set(self, key, value):
         self[key] = value
         return self.rpn.EL
@@ -379,13 +380,13 @@ class KeyedTableX:  ## XXX
             self.rpn.set_cdr(prev, self.rpn.cdr(node))
         return self.rpn.T
 
-    def get(self, key, default=SENTINEL):
+    def get(self, key, default):
         rpn = self.rpn
         prev, node = self.find(key)
         if self.rpn.is_empty_list(node):
             return default
         if not rpn.is_empty_list(prev):
-            ## move to front
+            ## move to front, ~50% speedup
             rpn.set_cdr(prev, rpn.cdr(node))
             rpn.set_cdr(node, self.t)
             self.t = node
@@ -499,7 +500,7 @@ class Environment:
         rpn = self.g.rpn
         e = self
         while not rpn.is_empty_list(e):
-            x = e.stab().get(sym)
+            x = e.stab().get(sym, SENTINEL)
             if x is not SENTINEL:
                 return x
             e = e.parent()
@@ -744,7 +745,7 @@ class Globals:
         rpn = self.rpn
         x = frame.x
         if rpn.is_symbol(x):
-            obj = frame.e.get(x)
+            obj = frame.e.get(x, SENTINEL)
             if obj is SENTINEL:
                 raise NameError(x)
             return bounce(frame.c, self, obj)
@@ -762,7 +763,7 @@ class Globals:
         else:
             sym, args = rpn.car(x), rpn.cdr(x)
         if rpn.is_symbol(sym):
-            op = frame.e.get(sym)
+            op = frame.e.get(sym, SENTINEL)
             if op is not SENTINEL and getattr(op, "special", False):
                 return bounce(op, self, Frame(frame, x=args))
         elif callable(sym):
@@ -1731,7 +1732,6 @@ class Lisp(Globals):
     Lambda = Lambda
     Continuation = Continuation
 
-
     def __init__(
         self,
         operator_class=None,
@@ -1766,7 +1766,7 @@ class Lisp(Globals):
         if not self.rpn.is_symbol(name):
             name = self.symbol(name)
         env = self.genv if env is None else env
-        ret = env.get(name)
+        ret = env.get(name, SENTINEL)
         return None if ret is SENTINEL else ret
 
     main = staticmethod(main)
