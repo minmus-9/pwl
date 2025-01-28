@@ -1,4 +1,6 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; lwp.lisp - runtime, lots of which is from other sources
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; pwl - python with lisp, a collection of lisp evaluators for Python
 ;;       https://github.com/minmus-9/pwl
@@ -35,25 +37,33 @@
 (define caddddr (lambda (l) (car (cdr (cdr (cdr (cdr l)))))))
 
 ;; }}}
-;; {{{ do
+;; {{{ last
 
-(define do (lambda (& args)
-    ((lambda (c)
-       (if
-            (null? args)
-            ()
+(define last (lambda (l)
+    (if
+        (null? l)
+        ()
+        ((lambda (c)        ;; <= top
             (if
-                (null? (cdr args))
-                (car args)
-                (if
-                    (set! args (cdr args))
-                    ()
-                    (c c)
+                (null? (cdr l))
+                (car l)
+                (if         ;; use if to sequence 2 tasks...
+                    (set! l (cdr l))
+                    ()      ;; set! returns () so...
+                    (c c)   ;; ... unconditional jump back to top
                 )
             )
-        )
-    ) (call/cc (lambda (cc) cc)))
+        ) (call/cc (lambda (cc) cc)) )  ;; params at the top.
+                                        ;; initial values at the bottom.
+                                        ;; got it?
+    )
 ))
+
+;; }}}
+;; {{{ begin/do
+
+(define do (lambda (& args) (last args)))
+(define begin do)
 
 ;; }}}
 ;; {{{ foreach
@@ -200,12 +210,15 @@
     )
 ))
 
-(define y (quote (17 31))) (define x 11)
-;(print (qq (add (sub 0 (unquote x)) (unquote-splicing y) 2)))
-;(print (qq (unquote x)))
-;(print (qq x))  ;; blows up with (car) in qq defn
-
-(print `(add (sub 0 ,x) ,@y 2))
+(define qqtest (lambda () ( do
+    (define y (quote (17 31)))
+    (define x 11)
+    (print (qq (add (sub 0 (unquote x)) (unquote-splicing y) 2)))
+    (print (qq (unquote x)))
+    (print (qq x))  ;; blows up with (car) in qq defn
+    (print `(add (sub 0 ,x) ,@y 2))
+)))
+; (qqtest)  ; hmmmm
 
 ;; }}}
 ;; {{{ def
@@ -216,11 +229,7 @@
 (define def$ (lambda (funcargs body) ( do
     (if
         (pair? funcargs)
-        (if
-            (null? funcargs)
-            (error "def needs a func to define!")
-            ()
-        )
+        ()
         (error "def needs a func to define!")
     )
     (define f (car funcargs))
@@ -606,19 +615,6 @@
     (define vars (car vdecls))
     (define vals (cadr vdecls))
     `((lambda (,@vars) ,body) ,@vals)
-)
-
-;; }}}
-;; {{{ last
-
-(def (last l)
-    ((lambda (c)
-        (if
-            (null? (cdr l))
-            (car l)
-            (if (set! l (cdr l)) () (c c)) ;; use if to sequence
-        )
-    ) (call/cc (lambda (cc) cc)) )
 )
 
 ;; }}}

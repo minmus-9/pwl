@@ -333,6 +333,12 @@ class KeyedTable(dict):  ## XXX
         self[key] = value
         return self.rpn.EL
 
+    def setbang(self, key, value):
+        if key not in self:
+            return False
+        self[key] = value
+        return True
+
 
 class KeyedTableX:  ## XXX
     ## NB compare() has to do its own type-checking! this also means
@@ -395,6 +401,15 @@ class KeyedTableX:  ## XXX
             pair = self.rpn.car(node)
             self.rpn.set_cdr(pair, value)
         return value
+
+    def setbang(self, key, value):
+        _, node = self.find(key)
+        if self.rpn.is_empty_list(node):
+            return False  ## not found
+        ## update value
+        pair = self.rpn.car(node)
+        self.rpn.set_cdr(pair, value)
+        return True
 
     def setdefault(self, key, value):
         _, node = self.find(key)
@@ -498,10 +513,7 @@ class Environment:
         e = self
         while not rpn.is_empty_list(e):
             t = e.stab()
-            ## XXX could add a table method for this
-            x = t.get(sym)
-            if x is not SENTINEL:
-                t.set(sym, value)
+            if t.setbang(sym, value):
                 return rpn.EL
             e = e.parent()
         raise NameError(rpn.sym2str(sym))
