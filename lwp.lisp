@@ -60,19 +60,6 @@
     )
 ))
 
-(define ! (lambda (n) (
-    (if
-        (define n! 1)
-        ()
-        ((lambda (c _ _)                ;; huh. gotta love it!
-            (if (lt? n 1) n! (c c)))
-            (call/cc (lambda (cc) cc))
-            (set! n! (mul n! n))
-            (set! n (sub n 1))
-        )
-    )
-)))
-
 ;; }}}
 ;; {{{ begin/do
 
@@ -146,93 +133,6 @@
     ))
     dispatch
 )))
-
-;; }}}
-;; {{{ broken quasiquoter
-
-(special qq (lambda (form) (qq$body form)))
-
-(define qq$body (lambda (form)
-    (if
-        (pair? form)
-        (car ((qq$list form (list-builder)) 'get))
-        form
-    )
-))
-
-(define qq$guts (lambda (form)
-    (if
-        (pair? form)
-        ((qq$list form (list-builder)) 'get)
-        form
-    )
-))
-
-(define qq$elt (lambda (elt lb)
-    (if
-        (pair? elt)
-        (qq$list elt lb)
-        (lb 'add elt)
-    )
-))
-
-(define qq$list (lambda (form lb)
-    (if
-        (define verb (car form))
-        ()
-        (if
-            (eq? (cdr (cdr form)) ())
-            (if
-                (eq? verb 'quasiquote)
-                (lb 'add (qq$guts (cadr form)))
-                (if
-                    (eq? verb 'unquote)
-                    (lb 'add (eval (cadr form) 0))
-                    (if
-                        (eq? verb 'unquote-splicing)
-                        (lb 'extend (eval (cadr form) 0))
-                        (lb 'add form)
-                    )
-                )
-            )
-            (if
-                (eq? verb 'quasiquote)
-                (error "quasiquote unquote unquote-splicing take a single arg")
-                (if
-                    (eq? verb 'unquote)
-                    (error "quasiquote unquote unquote-splicing take a single arg")
-                    (if
-                        (eq? verb 'unquote-splicing)
-                        (error "quasiquote unquote unquote-splicing take a single arg")
-                        (if
-                            (define lb2 (list-builder))
-                            ()
-                            (if
-                                (define f (lambda (elt) (qq$elt elt lb2)))
-                                ()
-                                (if
-                                    (foreach f form)
-                                    ()
-                                    (lb 'add (lb2 'get))
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        )
-    )
-))
-
-(define qqtest (lambda () ( do
-    (define y (quote (17 31)))
-    (define x 11)
-    (print (qq (add (sub 0 (unquote x)) (unquote-splicing y) 2)))
-    (print (qq (unquote x)))
-    (print (qq x))  ;; blows up with (car) in qq defn
-    (print `(add (sub 0 ,x) ,@y 2))
-)))
-; (qqtest)  ; hmmmm
 
 ;; }}}
 ;; {{{ def
@@ -751,15 +651,15 @@
 )
 
 ;; call f a given number of times as (f counter)
-(def (for f n)
-    (define i 0)
+(def (for f start stop step)
+    (define i start)
     (define c (call/cc (lambda (cc) cc)))
     (if
-        (ge? i n)
+        (ge? i stop)
         ()
         ( do
             (f i)
-            (set! i (add i 1))
+            (set! i (add i step))
             (c c)
         )
     )
@@ -770,13 +670,65 @@
 
 (def (timeit f n)
     (define t0 (time 'time))
-    (for f n)
+    (for f 0 n 1)
     (define t1 (time 'time))
     (define dt (sub t1 t0))
     (if (lt? dt 1e-7) (set! dt 1e-7) ())
     (if (lt? n 1) (set! n 1) ())
     (list n dt (mul 1e6 (div dt n)) (div n dt))
 )
+
+;; }}}
+;; {{{ interesting looking factorial implementation
+
+(define !1 (lambda (n)
+    (if
+        (define n! 1)
+        ()
+        ((lambda (c _ _)                ;; huh. gotta love it!
+            (if (lt? n 1) n! (c c)))
+            (call/cc (lambda (cc) cc))
+            (set! n! (mul n! n))
+            (set! n (sub n 1))
+        )
+    )
+))
+
+(def (!2 n)
+    (if
+        (lt? n 2)
+        1
+        (mul n (!2 (sub n 1)))
+    )
+)
+
+(def (!3 n)
+    (define n! 1)
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (lt? n 2)
+        n!
+        ( do
+            (set! n! (mul n n!))
+            (set! n  (sub n 1))
+            (c c)
+        )
+    )
+)
+
+(def (!4 n)
+     (define n! 1)
+     (def (f k) (set! n! (mul n! k)))
+     (for f 1 n 1)
+     n!
+)
+
+(timeit (lambda (_) ()) 10)
+;; !1  48ms
+;; !2 115ms
+;; !3  48ms
+;; !4 736ms
+;(timeit (lambda (_) (!1 100)) 10)
 
 ;; }}}
 

@@ -241,5 +241,64 @@
 (k 'call 'test 'a 'b 'c)
 
 
+;; {{{ factorials
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define !1 (lambda (n)
+    (if
+        (define n! 1)
+        ()
+        ((lambda (c _ _)                ;; huh. gotta love it!
+            (if (lt? n 1) n! (c c)))
+            (call/cc (lambda (cc) cc))
+            (set! n! (mul n! n))
+            (set! n (sub n 1))
+        )
+    )
+))
+
+(def (!2 n)
+    (if
+        (lt? n 2)
+        1
+        (mul n (!2 (sub n 1)))
+    )
+)
+
+(def (!3 n)
+    (define n! 1)
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (lt? n 2)
+        n!
+        ( do
+            (set! n! (mul n n!))
+            (set! n  (sub n 1))
+            (c c)
+        )
+    )
+)
+
+(def (!4 n)
+     (define n! 1)
+     (def (f k) (set! n! (mul n! k)))
+     (for f 1 n 1)
+     n!
+)
+
+(timeit (lambda (_) ()) 10)
+;; for 100!
+;; !1  48ms
+;; !2 115ms
+;; !3  48ms
+;; !4 736ms
+(timeit (lambda (_) (!1 40)) 10)
+(timeit (lambda (_) (!2 40)) 10)
+(timeit (lambda (_) (!3 40)) 10)
+(timeit (lambda (_) (!4 40)) 10)
+
+;; }}}
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (print "t.lisp done")
