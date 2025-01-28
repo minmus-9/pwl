@@ -227,6 +227,7 @@
 ;; {{{ factorials
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; fastest for the dict-based KeyedTable case
 (define !1 (lambda (n)
     (if
         (define n! 1)
@@ -248,7 +249,9 @@
     )
 )
 
-(def (!3 n)
+;; the winner!
+(def (!3 n)  ;; significantly faster than !1 for non-dict KeyedTable case
+             ;; marginally slower than !1 for dict-based KeyedTable
     (define n! 1)
     (define c (call/cc (lambda (cc) cc)))
     (if
@@ -426,7 +429,7 @@
     (print '!12 (timeit (lambda (_) (!12 n)) reps))
     (print '!13 (timeit (lambda (_) (!13 n)) reps))
 )
-;(!bench)
+(!bench)
 
 ;; }}}
 
