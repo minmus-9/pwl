@@ -17,6 +17,8 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+;; {{{ basics
+
 ;; to accompany quasiquote
 (define unquote (lambda (x) (error "cannot unquote here")))
 (define unquote-splicing (lambda (x) (error "cannot unquote-splicing here")))
@@ -32,6 +34,7 @@
 (define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
 (define caddddr (lambda (l) (car (cdr (cdr (cdr (cdr l)))))))
 
+;; }}}
 ;; {{{ do
 
 (define do (lambda (& args)
@@ -75,7 +78,7 @@
 ;; dingus to build a list by appending in linear time. it's an ad-hoc queue
 
 (define list-builder (lambda () ( do
-    (define ht '(() ()))
+    (define ht (list () ()))
     (define add (lambda (x) ( do
         (define node (cons x ()))
         (if
@@ -243,6 +246,15 @@
 ))
 
 ;; }}}
+;; {{{ bitwise ops
+
+;; bitwise ops from nand
+(def (bnot x)   (nand x x))
+(def (band x y) (bnot (nand x y)))
+(def (bor  x y) (nand (bnot x) (bnot y)))
+(def (bxor x y) (band (nand x y) (bor x y)))
+
+;; }}}
 ;; {{{ arithmetic
 
 (def (neg x) (sub 0 x))
@@ -298,7 +310,7 @@
 )
 
 ;; signed integer multiplication from subtraction and right shift (division)
-(define smul (lambda (x y) (do
+(def (smul x y)
     (define umul (lambda (x y z) (
         cond
             ((equal? y 1) x) ;; y could have been -1 on entry to smul
@@ -314,16 +326,9 @@
         ((equal? y 1) x)
         (#t (copysign (umul x (abs y) 0) y))
     )
-)))
+)
 
-;; }}}
-;; {{{ bitwise ops
-
-;; bitwise ops from nand
-(def (bnot x)   (nand x x))
-(def (band x y) (bnot (nand x y)))
-(def (bor  x y) (nand (bnot x) (bnot y)))
-(def (bxor x y) (band (nand x y) (bor x y)))
+;(smul 37 23)  ;; 851
 
 ;; }}}
 ;; {{{ comparison predicates
@@ -366,49 +371,7 @@
 (def (not x) (if (eq? x ()) #t ()))
 
 ;; }}}
-
-(define join (lambda (x y)
-    (if
-        (null? x)
-        y
-        (cons (car x) (join (cdr x) y))
-    )
-))
-
-(def (joinx x y)
-    (define lb (list-builder))
-    (if
-        (null? x)
-        y
-        (if
-            (null? y)
-            x
-            ( do
-                (lb 'extend x)
-                (lb 'extend y)
-                (lb 'get)
-            )
-        )
-    )
-)
-
-(join (list 1 2 3) (list 4 5))
-
-(def (length l)
-    (define n 0)
-    (define c (call/cc (lambda (cc) cc)))
-    (if
-        (null? l)
-        n
-        ( do
-            (set! n (add n 1))
-            (set! l (cdr l))
-            (c c)
-        )
-    )
-)
-
-(length (list 1 4 9 16))
+;; {{{ assert
 
 (special assert (lambda (__special_assert_sexpr__)
     (if
@@ -418,6 +381,8 @@
     )
 ))
 
+;; }}}
+;; {{{ reverse
 
 (def (reverse l)
     (define r ())
@@ -433,72 +398,15 @@
     )
 )
 
-;; sicp p.158-165 with interface tweaks
-(def (accumulate f initial sequence)
-    (define r initial)
-    (foreach (lambda (elt) (set! r (f elt r))) (reverse sequence))
-    r
-)
+;; }}}
+;; {{{ apply
 
-(def (fold-left f initial sequence)
-    (define r initial)
-    (foreach (lambda (elt) (set! r (f elt r))) sequence)
-    r
-)
+(def (apply sym args) (eval (cons sym args)))
 
-(accumulate cons () (list 1 9 25))  ;; (1 9 25)
-(fold-left cons () (list 1 9 25))   ;; (25 9 1)
-(exit 0)
+;; }}}
+;; {{{ iter and enumerate
 
-(def (map1 f lst)
-    (define l (reverse lst))
-    (define r ())
-    (define c (call/cc (lambda (cc) cc)))
-    (if
-        (null? l)
-        r
-        ( do
-            (set! r (cons (f (car l)) r))
-            (set! l(cdr l))
-            (c c)
-        )
-    )
-)
-
-(define accumulate-n (lambda (f initial sequences) (
-    if
-        (null? (car sequences)) ;; assume other seqs are empty too
-        ()
-        (cons
-            (accumulate f initial (map1 car sequences))
-            (accumulate-n f initial (map1 cdr sequences))
-        )
-)))
-
-(define transpose (lambda (lists) (
-    accumulate-n cons () lists
-)))
-
-(define map (lambda (f & lists) (do
-    (def (g tuple) (apply f tuple))
-    (map1 g (transpose lists))
-)))
-
-
-;; save some (eval (join (quote (sym)) args)) awkwardness
-
-(define apply (lambda (sym args) ( do
-    (eval (cons sym args))
-)))
-
-(apply add (list 1 2 3))
-
-(print (map list (list 1 2 3) (list 4 5 6) (list 7 8 9)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; it's still python-thinking today :D
-
-(define iter (lambda (lst fin) (do
+(def (iter lst fin)
     (define item ())
     (define next (lambda ()
         (if
@@ -512,9 +420,9 @@
         )
     ))
     next
-)))
+)
 
-(define enumerate (lambda (lst fin) (do
+(def (enumerate lst fin)
     (define index 0)
     (define item fin)
     (define next (lambda ()
@@ -530,17 +438,90 @@
         )
     ))
     next
-)))
+)
 
+;; }}}
+;; {{{ length
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; queue
+(def (length l)
+    (define n 0)
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (null? l)
+        n
+        ( do
+            (set! n (add n 1))
+            (set! l (cdr l))
+            (c c)
+        )
+    )
+)
 
-(define queue (lambda () ( do
+;; }}}
+;; {{{ fold, transpose, map
+;; sicp p.158-165 with interface tweaks
+(def (fold-left f initial sequence)
+    (define r initial)
+    (foreach (lambda (elt) (set! r (f elt r))) sequence)
+    r
+)
+
+(define reduce fold-left)  ;; python nomenclature
+
+(def (fold-right f initial sequence)
+      (fold-left f initial (reverse sequence)))
+
+(define accumulate fold-right)  ;; sicp nomenclature
+
+;(fold-left  cons () (list 1 4 9))  ;; (9 4 1)    (cons 9 (cons 4 (cons 1 ())))
+;(fold-right cons () (list 1 4 9))  ;; (1 4 9)    (cons 1 (cons 4 (cons 9 ())))
+
+(def (map1 f lst)
+    (def (g elt r) (cons (f elt) r))
+    (fold-right g () lst)
+)
+
+(def (accumulate-n f initial sequences)
+    (define r ())
+    (define c (call/cc (lambda (cc) cc)))
+    (if
+        (null? (car sequences))
+        (reverse r)
+        ( do
+            (set! r (cons (accumulate f initial (map1 car sequences)) r))
+            (set! sequences (map1 cdr sequences))
+            (c c)
+        )
+    )
+)
+
+(def (transpose lists) (accumulate-n cons () lists))
+
+(def (map f & lists)
+    (def (g tuple) (apply f tuple))
+    (map1 g (transpose lists))
+)
+
+;; }}}
+;; {{{ join
+
+(def (join x y)
+    (cond
+        ((null? x) y)
+        ((null? y) x)
+        ((null? (cdr x)) (cons (car x) y))
+        (#t (fold-right cons (fold-right cons () y) x))
+    )
+)
+
+;; }}}
+;; {{{ queue
+
+(def (queue)
     (define h ())
     (define t ())
 
-    (define dispatch (lambda (op & args)
+    (def (dispatch op & args)
         (cond
             ((eq? op (quote enqueue))
                 (if
@@ -589,18 +570,18 @@
             )
             ((eq? op (quote get-all)) h)
         )
-    ))
+    )
     dispatch
-)))
+)
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; let*
+;; }}}
+;; {{{ let*
 
 (special let* (lambda (__special_lets_vdefs__ __special_lets_body__)
     (eval (let*$ __special_lets_vdefs__ __special_lets_body__) 1)))
 
-(define let*$ (lambda (vdefs body) ( do
+(def (let*$ vdefs body)
     (if
         (null? vdefs)
         body
@@ -612,27 +593,25 @@
           `((lambda (,k) ,(let*$ vdefs body)) ,v)
         )
     )
-)))
+)
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; let
+;; }}}
+;; {{{ let
 
 (special let (lambda (__special_let_vdefs__ __special_let_body__)
     (eval (let$ __special_let_vdefs__ __special_let_body__) 1)))
 
-(define let$ (lambda (vdefs body) ( do
+(def (let$ vdefs body)
     (define vdecls (transpose vdefs))
     (define vars (car vdecls))
     (define vals (cadr vdecls))
     `((lambda (,@vars) ,body) ,@vals)
-)))
+)
 
+;; }}}
+;; {{{ last
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; last
-
-(define last (lambda (l)
+(def (last l)
     ((lambda (c)
         (if
             (null? (cdr l))
@@ -640,15 +619,14 @@
             (if (set! l (cdr l)) () (c c)) ;; use if to sequence
         )
     ) (call/cc (lambda (cc) cc)) )
-))
+)
 
+;; }}}
+;; {{{ associative table
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; associative table
-
-(define table (lambda (compare) ( do
+(def (table compare)
     (define items ())
-    (define dispatch (lambda (m & args) ( do
+    (def (dispatch m & args)
         (cond
             ((eq? m 'known) (not (null? (table$find items key compare))))
             ((eq? m 'del) (set! items (table$delete items (car args) compare)))
@@ -698,21 +676,21 @@
             ))
             (#t (error "unknown method"))
         )
-    )))
+    )
     dispatch
-)))
+)
 
-(define table$find (lambda (items key compare)
+(def (table$find items key compare)
     (cond
       ((null? items) ())
       ((compare (car (car items)) key) (car items))
       (#t (table$find (cdr items) key compare))
     )
-))
+)
 
-(define table$delete (lambda (items key compare) ( do
+(def (table$delete items key compare)
     (define prev ())
-    (define helper (lambda (assoc key) ( do
+    (def (helper assoc key)
         (cond
             ((null? assoc) items)
             ((compare (car (car assoc)) key) (do
@@ -726,13 +704,12 @@
                 (helper (cdr assoc) key)
             ))
         )
-    )))
+    )
     (helper items key)
-)))
+)
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; looping
+;; }}}
+;; {{{ looping: loop, while, until, for
 
 ;; call f in a loop forever
 (define loop (lambda (f) ( do
@@ -778,25 +755,8 @@
     )
 )
 
-(define reverse (lambda (lst) ( do
-    (define r ())
-    (define f (lambda ()
-        (if
-            (null? lst)
-            ()
-            (do
-                (set! r (cons (car lst) r))
-                (set! lst (cdr lst))
-                #t
-            )
-        )
-    ))
-    (while f)
-    r
-)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; benchmarking
+;; }}}
+;; {{{ benchmarking
 
 (def (timeit f n)
     (define t0 (time 'time))
@@ -808,5 +768,6 @@
     (list n dt (mul 1e6 (div dt n)) (div n dt))
 )
 
+;; }}}
 
 ;; EOF
