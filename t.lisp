@@ -232,7 +232,7 @@
         (define n! 1)
         ()
         ((lambda (c _ _)                ;; huh. gotta love it!
-            (if (lt? n 1) n! (c c)))    ;; misleading formatting++
+            (if (lt? n 2) n! (c c)))    ;; misleading formatting++
             (call/cc (lambda (cc) cc))
             (set! n! (mul n! n))
             (set! n (sub n 1))
@@ -296,6 +296,10 @@
      (math 'factorial n)
 )
 
+(def (!8 n)
+    (fold-left mul 2 (range 3 (add n 1) 1))
+)
+
 (def (xrange start stop step)
     (define i (sub start step))
     (def (next)
@@ -311,23 +315,102 @@
     next
 )
 
-(def (!8 n)
-    (fold-left mul 2 (range 3 (add n 1) 1))
+(def (!9 n)
+    (def (f r)
+        (if
+            (null? (do (define k ((car r))) k))
+            (cdr r)
+            (f (cons (car r) (mul (cdr r) k)))
+        )
+    )
+    (f (cons (xrange 2 n 1) 1))
 )
 
-;; (lambda (_) ()) 7ms
-;; for 100!, minus 7ms:
-;;      !1  42ms
-;;      !2 106ms
-;;      !3  42ms
-;;      !4 256ms
-;;      !5 303ms
-;;      !6 115ms
-;;      !7  <2ms
-;;      !8  64ms
+(def (!10 n)
+    (let* (
+        (it (xrange 2 n 1))
+        (c  ())
+        (n! 1)
+        (k  (call/cc (lambda (cc) (do (set! c cc) (it))))))
+        (if
+            (null? k)
+            n!
+            (do (set! n! (mul n! k)) (c (it)))
+        )
+    )
+)
+
+(def (!11 n)
+    (define c ())
+    ((lambda (n! k) ( do
+        (set! n (sub k 1))
+        (if (lt? k 2) n! (c (mul n! k)))))
+        (call/cc (lambda (cc) (do (set! c cc) 1)))
+        n
+    )
+)
+
+(def (!12 n)
+    (define c ())
+    (def (f n!k)
+        (if
+            (lt? (cdr n!k) 2)
+            (car n!k)
+            (c
+                (cons
+                    (mul (car n!k) (cdr n!k))
+                    (sub (cdr n!k) 1)
+                )
+            )
+        )
+    )
+    (f
+        (call/cc
+            (lambda (cc) (do
+                (set! c cc)
+                (cons 1 n))
+            )
+        )
+    )
+)
+
+(def (!13 n)
+    (def (f info)
+        (if
+            (lt? (cadr info) 2)
+            (car info)
+            ((caddr info)
+                (list
+                    (mul (car info) (cadr info))
+                    (sub (cadr info) 1)
+                    (caddr info)
+                )
+            )
+        )
+    )
+    (f (call/cc (lambda (cc) (list 1 n cc))))
+)
+
+(print '************************************************************)
+
+;; (lambda (_) ()) 7ms      2ms
+;; mmc1, 100!, minus 7ms:   2ms (home, high performance)
+;;      !1  42ms           10
+;;      !2 106ms           27
+;;      !3  42ms           11
+;;      !4 256ms          183 
+;;      !5 303ms           78
+;;      !6 115ms           31
+;;      !7  <2ms           <1
+;;      !8  64ms           16
+;;      !9 ???ms          271
+;;     !10 ???ms          222
+;;     !11 ???ms           11
+;;     !12 ???ms           18
+;;     !13 ???ms           36
 (def (!bench)
     (define reps 5)
-    (define n 10)
+    (define n 100)
     (print 'nil (timeit (lambda (_) ()) 10))
     (print '!1  (timeit (lambda (_) (!1 n)) reps))
     (print '!2  (timeit (lambda (_) (!2 n)) reps))
@@ -337,8 +420,13 @@
     (print '!6  (timeit (lambda (_) (!6 n)) reps))
     (print '!7  (timeit (lambda (_) (!7 n)) reps))
     (print '!8  (timeit (lambda (_) (!8 n)) reps))
+    (print '!9  (timeit (lambda (_) (!9 n)) reps))
+    (print '!10 (timeit (lambda (_) (!10 n)) reps))
+    (print '!11 (timeit (lambda (_) (!11 n)) reps))
+    (print '!12 (timeit (lambda (_) (!12 n)) reps))
+    (print '!13 (timeit (lambda (_) (!13 n)) reps))
 )
-(!bench)
+;(!bench)
 
 ;; }}}
 
