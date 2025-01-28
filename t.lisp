@@ -20,20 +20,10 @@
 ;;
 ;; this file is just for fiddling around
 
+(print "t.lisp start")
 
+;; {{{ rational number arithmetic
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; rational number arithmetic
-
-(define gcd (lambda (x y)
-    (cond
-        ((lt? x y) (gcd y x))
-        ((equal? x 0) 1)
-        ((equal? y 0) x)
-        (#t (gcd y (mod x y)))
-    )
-))
-
-(timeit (lambda (_) (gcd 2379728399026437315402 2173491264856982165498)) 4)
 
 (define rat (lambda (x y) ( do
     (define z (gcd x y))
@@ -86,43 +76,8 @@
     dispatch
 )))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; fiddling getting quasiquote to work
-
-(define v 'a) (define e 97) (define l '(1 2))
-(define w ())
-(define z (lambda (v e) ( do
-  (print 'QQ `(set! ,v (add 1 ,e ,@l ,@(list 3 4))))
-      (eval  `(set! ,v (add 1 ,e ,@l ,@(list 3 4))))
-      (print 'W w)
-
-  (print 'QQ `(set! ,v (add 1 ,e ,@l ,@(list) 17)))
-      (eval  `(set! ,v (add 1 ,e ,@l ,@(list) 17)))
-)))
-(print 'W w)
-(z 'w 121)
-(print 'W w)
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; looks weird but isn't
-
-(define countdown (lambda (n) ( do
-    ((lambda (c k) ( do
-        (cond
-            ((lt? n 1) "OK")
-            (#t (do (print 'N n) (set! n k) (c c)))
-        )
-    ))
-        (call/cc (lambda (cc) cc))
-        (sub n 3)
-    )
-)))
-
-(countdown 10)
-
-
+;; }}}
+;; {{{ kernel concept
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; "kadd" service executes "kernel" coroutine to handle the blocking
 ;; kadd request (blocks from the perspective of the (kadd) caller);
@@ -165,7 +120,8 @@
 
 (kadd 11 31)
 
-
+;; }}}
+;; {{{ more kernel concept
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
@@ -223,7 +179,7 @@
 (k 'call 'time)
 (k 'call 'test 'a 'b 'c)
 
-
+;; }}}
 ;; {{{ factorials
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -394,8 +350,6 @@
     (f (call/cc (lambda (cc) (list 1 n cc))))
 )
 
-(print '************************************************************)
-
 ;; (lambda (_) ()) 7ms      2ms
 ;; mmc1, 100!, minus 7ms:   2ms (home, high performance)
 ;;      !1  42ms           10
@@ -429,9 +383,12 @@
     (print '!12 (timeit (lambda (_) (!12 n)) reps))
     (print '!13 (timeit (lambda (_) (!13 n)) reps))
 )
-(!bench)
+;(!bench)
 
 ;; }}}
+
+(print '************************************************************)
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

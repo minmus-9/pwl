@@ -499,6 +499,19 @@
 
 
 ;; }}}
+;; {{{ let
+
+(special let (lambda (__special_let_vdefs__ __special_let_body__)
+    (eval (let$ __special_let_vdefs__ __special_let_body__) 1)))
+
+(def (let$ vdefs body)
+    (define vdecls (transpose vdefs))
+    (define vars (car vdecls))
+    (define vals (cadr vdecls))
+    `((lambda (,@vars) ,body) ,@vals)
+)
+
+;; }}}
 ;; {{{ let*
 
 (special let* (lambda (__special_lets_vdefs__ __special_lets_body__)
@@ -519,16 +532,20 @@
 )
 
 ;; }}}
-;; {{{ let
+;; {{{ letrec
+;; i saw this (define x ()) ... (set! x value) on stackoverflow somewhere
 
-(special let (lambda (__special_let_vdefs__ __special_let_body__)
-    (eval (let$ __special_let_vdefs__ __special_let_body__) 1)))
+(special letrec (lambda (__special_letrec_decls__ __special_letrec_body__)
+    (eval (letrec$ __special_letrec_decls__ __special_letrec_body__) 1)))
 
-(def (let$ vdefs body)
-    (define vdecls (transpose vdefs))
-    (define vars (car vdecls))
-    (define vals (cadr vdecls))
-    `((lambda (,@vars) ,body) ,@vals)
+(def (letrec$ decls & body)
+    (define names (map1 car decls))
+    (define values (map1 cadr decls))
+    (def (declare var) `(define ,var ()))
+    (def (initialize var-value) `(set! ,(car var-value) ,(cadr var-value)))
+    (def (declare-all) (map1 declare names))
+    (def (initialize-all) (map1 initialize decls))
+    `((lambda () ( do ,@(declare-all) ,@(initialize-all) ,@body)))
 )
 
 ;; }}}
@@ -628,6 +645,23 @@
     (c c)
 )
 
+;; call f in a loop forever or until (break) is called
+(def (loop-with-break f)
+    (define brk ())
+    (def (break) (brk ()))
+    (def (g)
+        (define c (call/cc (lambda (cc) cc)))
+        (f break)
+        (c c)
+    )
+    (set! brk (call/cc (lambda (cc) cc)))
+    (if
+        brk
+        (g)
+        ()
+    )
+)
+
 ;; loop while f returns true
 (def (while f)
     (define c ())
@@ -652,16 +686,17 @@
 
 ;; call f a given number of times as (f counter)
 (def (for f start stop step)
+    (if (lt? step 1) (error "step must be positive") ())
     (define i start)
     (define c (call/cc (lambda (cc) cc)))
     (if
-        (ge? i stop)
-        ()
+        (lt? i stop)
         ( do
             (f i)
             (set! i (add i step))
             (c c)
         )
+        ()
     )
 )
 
@@ -676,6 +711,29 @@
     (if (lt? dt 1e-7) (set! dt 1e-7) ())
     (if (lt? n 1) (set! n 1) ())
     (list n dt (mul 1e6 (div dt n)) (div n dt))
+)
+
+;; }}}
+;; {{{ gcd
+
+(def (gcd x y)
+    (cond
+        ((lt? x y) (gcd y x))
+        ((equal? x 0) 1)
+        (#t ( do
+            (define c (call/cc (lambda (cc) cc)))
+            (if
+                (equal? y 0)
+                x
+                ( do
+                    (define r (mod x y))
+                    (set! x y)
+                    (set! y r)
+                    (c c)
+                )
+            )
+        ))
+    )
 )
 
 ;; }}}
