@@ -55,9 +55,23 @@
             )
         ) (call/cc (lambda (cc) cc)) )  ;; params at the top.
                                         ;; initial values at the bottom.
-                                        ;; got it?
+                                        ;; code goes in between.
+                                        ;; hahaha love it!
     )
 ))
+
+(define ! (lambda (n) (
+    (if
+        (define n! 1)
+        ()
+        ((lambda (c _ _)                ;; huh.
+            (if (lt? n 1) n! (c c)))
+            (call/cc (lambda (cc) cc))
+            (set! n! (mul n! n))
+            (set! n (sub n 1))
+        )
+    )
+)))
 
 ;; }}}
 ;; {{{ begin/do
