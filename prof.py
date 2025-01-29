@@ -44,7 +44,7 @@ if 1:
     cProfile.run("""
 import lwp
 import sys
-sys.argv[1:] = ["lwp.lisp", "sicp.lisp"]
+sys.argv[1:] = ["lwp.lisp", "sicp.lisp", "t.lisp"]
 lwp.main()
     """, PROFILE)
 

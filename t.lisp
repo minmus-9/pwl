@@ -350,21 +350,54 @@
     (f (call/cc (lambda (cc) (list 1 n cc))))
 )
 
-;; (lambda (_) ()) 7ms      2ms
-;; mmc1, 100!, minus 7ms:   2ms (home, high performance)
-;;      !1  42ms           10
-;;      !2 106ms           27
-;;      !3  42ms           11
-;;      !4 256ms          183 
-;;      !5 303ms           78
-;;      !6 115ms           31
-;;      !7  <2ms           <1
-;;      !8  64ms           16
-;;      !9 ???ms          271
-;;     !10 ???ms          222
-;;     !11 ???ms           11
-;;     !12 ???ms           18
-;;     !13 ???ms           36
+(def (!14 n)
+    (def (f x)
+        (set! n (sub n 1))
+        (mul n x)
+    )
+    (iter-func f n (sub n 1))
+)
+
+(def (!15 n)
+    (def (f nn!)
+        (define n (car nn!))
+        (define n! (cdr nn!))
+        (cons
+            (add n 1)
+            (mul n n!)
+        )
+    )
+    (cdr (iter-func f (cons 1 1) n))
+)
+
+;; time 5 reps of 100!, record time per rep in ms
+;;
+;; calibration time listed as "nil" has been
+;; subtracted from the 1-13 numbers
+;;
+;;  2025-01-28
+;;  commmit 009e665e962cec1477847b91dd82294f54f3b1e1
+;;
+;;        home        home       galaxy
+;;        fast        slow        s24+
+;;       =====       =====       =====
+;; nil       1         2.5         1.4
+;;   1       9          22          12
+;;   2      25          54          30
+;;   3      10          21          12
+;;   4     123         271         153
+;;   5      70         159          89
+;;   6      26          58          33
+;;   7      <1          <1          <1
+;;   8      15          35          19
+;;   9     240         543         303
+;;  10     195         444         249
+;;  11      10          24          13
+;;  12      15          36          19
+;;  13      31          72          41
+;;  14      41          92         ***
+;;  15     147         339         ***
+;;
 (def (!bench)
     (define reps 5)
     (define n 100)
@@ -382,8 +415,10 @@
     (print '!11 (timeit (lambda (_) (!11 n)) reps))
     (print '!12 (timeit (lambda (_) (!12 n)) reps))
     (print '!13 (timeit (lambda (_) (!13 n)) reps))
+    (print '!14 (timeit (lambda (_) (!14 n)) reps))
+    (print '!15 (timeit (lambda (_) (!15 n)) reps))
 )
-;(!bench)
+(!bench)
 
 ;; }}}
 
