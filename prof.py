@@ -45,7 +45,7 @@ if 1:
 import lwp
 import sys
 sys.argv[1:] = ["lwp.lisp", "sicp.lisp", "t.lisp"]
-sys.argv[1:] = ["lwp.lisp", "sicp.lisp"]
+#sys.argv[1:] = ["lwp.lisp", "sicp.lisp"]
 lwp.main()
     """, PROFILE)
 

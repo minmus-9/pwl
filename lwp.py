@@ -250,8 +250,6 @@ class Frame:
 
     def __init__(self, *frames, **kw):
         for frame in frames:
-            if not isinstance(frame, Frame):
-                raise TypeError(f"expected Frame, got {frame!r}")
             self.__dict__.update(frame.__dict__)
         self.__dict__.update(kw)
 
@@ -556,18 +554,19 @@ class Globals:
     ## {{{ argument unpacker
 
     def unpack(self, lst, n):
+        args = lst
         rpn = self.rpn
         ret = []
         for _ in range(n):
             if rpn.is_empty_list(lst):
-                raise TypeError(f"not enough args, expected {n}")
+                raise TypeError(f"not enough args, expected {n}, got {args}")
             if not rpn.is_pair(lst):
                 ## so we know we're a list at each iteration
                 raise RuntimeError("bad list passed to unpack()")
             ret.append(rpn.car(lst))
             lst = rpn.cdr(lst)
         if not rpn.is_empty_list(lst):
-            raise TypeError(f"too many args, expected {n}")
+            raise TypeError(f"too many args, expected {n}, got {args}")
         return ret
 
     ## }}}

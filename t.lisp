@@ -398,6 +398,15 @@
 ;;  14      41          92         ***
 ;;  15     147         339         ***
 ;;
+;; starting 95406b3b3f54d14bb60168f573bfe2307a362f71
+;; just record runtime of (!bench), same 15 impls
+;;
+;;    home        home       galaxy
+;;    fast        slow        s24+
+;;   =====       =====       =====
+;;    4.76       10.75       *****      95406b3b3f54d14bb60168f573bfe2307a362f71
+;;    4.61       10.43       *****      next
+;;
 (def (!bench)
     (define reps 5)
     (define n 100)
