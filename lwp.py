@@ -744,24 +744,21 @@ class Globals:
         assert g is self
         rpn = self.rpn
         x = frame.x
-        if rpn.is_symbol(x):
-            obj = frame.e.get(x, SENTINEL)
-            if obj is SENTINEL:
-                raise NameError(x)
-            return bounce(frame.c, self, obj)
-        ## NB test is_atom *after* is_symbol
-        if rpn.is_atom(x) or rpn.is_number(x) or rpn.is_string(x):
-            return bounce(frame.c, self, x)
-        if callable(x):
-            ## primitive Lambda Continuation
+
+        sym = args = None
+        while True:
+            if rpn.is_symbol(x):
+                obj = frame.e.get(x, SENTINEL)
+                if obj is SENTINEL:
+                    raise NameError(x)
+                return bounce(frame.c, self, obj)
+            if rpn.is_pair(x):
+                sym, args = rpn.car(x), rpn.cdr(x)
+                break
             if is_lambda(x):
                 sym, args = x, rpn.EL
-            else:
-                return bounce(frame.c, self, x)
-        elif not rpn.is_pair(x):
-            raise RuntimeError(f"unexpected object type {x!r}")
-        else:
-            sym, args = rpn.car(x), rpn.cdr(x)
+                break
+            return bounce(frame.c, self, x)
         if rpn.is_symbol(sym):
             op = frame.e.get(sym, SENTINEL)
             if op is not SENTINEL and getattr(op, "special", False):

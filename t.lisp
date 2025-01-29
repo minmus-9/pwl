@@ -418,7 +418,7 @@
     (print '!14 (timeit (lambda (_) (!14 n)) reps))
     (print '!15 (timeit (lambda (_) (!15 n)) reps))
 )
-(!bench)
+(timeit (lambda (_) (!bench)) 1)
 
 ;; }}}
 
