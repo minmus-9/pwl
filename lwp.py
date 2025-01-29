@@ -5,6 +5,7 @@
 ## pylint: disable=invalid-name,too-many-lines
 ## XXX pylint: disable=missing-docstring
 
+import locale
 import os
 import sys
 import traceback
@@ -1667,24 +1668,6 @@ def main(force_repl=False, lisp=None, lisp_class=None):
         if not g.rpn.is_empty_list(value):
             print(g.stringify(value))
 
-    def eat(src):
-        p = Parser(g, callback)
-        p.feed(src)
-        p.feed(None)
-
-    def load(filename):
-        for base in [os.getcwd(), os.path.dirname(__file__)] + sys.path:
-            path = os.path.join(base, filename)
-            if os.path.exists(path):
-                filename = path
-                break
-        else:
-            raise RuntimeError(f"cannot find {filename}")
-        with open(  ## pylint: disable=unspecified-encoding
-            filename, "r"
-        ) as fp:
-            eat(fp.read())
-
     stop = True
     for filename in sys.argv[1:]:
         if filename == "+":
@@ -1696,11 +1679,11 @@ def main(force_repl=False, lisp=None, lisp_class=None):
         if filename == "-":
             stop = False
             break
-        load(filename)
+        g.load(filename, callback=callback)
         stop = True
     if force_repl or not stop:
         try:
-            raise SystemExit(repl(g, callback))
+            raise SystemExit(g.repl(callback))
         finally:
             if not g.stack.is_empty():
                 print("STACK", g.stack.get_data_structure())
@@ -1757,6 +1740,22 @@ class Lisp(Globals):
 
         self.parse(text, callback)
         return results
+
+    def load(self, filename, callback=None):
+        if os.path.isabs(filename):
+            path = filename
+        else:
+            for d in [os.path.dirname(__file__)] + sys.path:
+                path = os.path.join(d, filename)
+                if os.path.isfile(path):
+                    break
+            else:
+                raise FileNotFoundError(filename)
+        with open(path, "r", encoding=locale.getpreferredencoding()) as fp:
+            if callback:
+                self.parse(fp.read(), callback)
+            else:
+                self.execute(fp.read())
 
     def lookup(self, name, env=None):
         if not self.rpn.is_symbol(name):
