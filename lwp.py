@@ -13,6 +13,9 @@ import traceback
 
 SENTINEL = object()
 
+STRICT = True
+#STRICT = False
+
 
 ## {{{ error
 
@@ -25,14 +28,22 @@ class LispError(Exception):
 ## {{{ trampoline
 
 
-def trampoline(func, *args):
-    while True:
-        result = func(*args)
-        assert isinstance(result, tuple) and tuple, result
-        if len(result) == 1:
-            return result[0]
-        assert len(result) == 2, result
-        func, args = result
+if STRICT:
+    def trampoline(func, *args):
+        while True:
+            result = func(*args)
+            assert isinstance(result, tuple) and tuple, result
+            if len(result) == 1:
+                return result[0]
+            assert len(result) == 2, result
+            func, args = result
+else:
+    def trampoline(func, *args):
+        while True:
+            result = func(*args)
+            if len(result) == 1:
+                return result[0]
+            func, args = result
 
 
 def bounce(func, *args):
@@ -132,15 +143,22 @@ class Representation:
     def cons(self, x, y):
         return self.Pair(self, x, y)
 
-    def set_car(self, pair, x):
-        if not self.is_pair(pair):
-            raise TypeError(f"expected pair, got {pair!r}")
-        return pair.set_car(x)
+    if STRICT:
+        def set_car(self, pair, x):
+            if not self.is_pair(pair):
+                raise TypeError(f"expected pair, got {pair!r}")
+            return pair.set_car(x)
 
-    def set_cdr(self, pair, x):
-        if not self.is_pair(pair):
-            raise TypeError(f"expected pair, got {pair!r}")
-        return pair.set_cdr(x)
+        def set_cdr(self, pair, x):
+            if not self.is_pair(pair):
+                raise TypeError(f"expected pair, got {pair!r}")
+            return pair.set_cdr(x)
+    else:
+        def set_car(self, pair, x):
+            return pair.set_car(x)
+
+        def set_cdr(self, pair, x):
+            return pair.set_cdr(x)
 
     ## string
 
@@ -222,22 +240,33 @@ class Stack:
     def is_empty(self):
         return self.rpn.is_empty_list(self.stack)
 
-    def pop(self):
-        rpn = self.rpn
-        stk = self.stack
-        if rpn.is_empty_list(stk):
-            raise ValueError("stack is empty")
-        ret = rpn.car(stk)
-        self.stack = rpn.cdr(stk)
-        return ret
+    if STRICT:
+        def pop(self):
+            rpn = self.rpn
+            stk = self.stack
+            if rpn.is_empty_list(stk):
+                raise ValueError("stack is empty")
+            ret = rpn.car(stk)
+            self.stack = rpn.cdr(stk)
+            return ret
+
+        def top(self):
+            if self.rpn.is_empty_list(self.stack):
+                raise ValueError("stack is empty")
+            return self.rpn.car(self.stack)
+    else:
+        def pop(self):
+            rpn = self.rpn
+            stk = self.stack
+            ret = rpn.car(stk)
+            self.stack = rpn.cdr(stk)
+            return ret
+
+        def top(self):
+            return self.rpn.car(self.stack)
 
     def push(self, x):
         self.stack = self.rpn.cons(x, self.stack)
-
-    def top(self):
-        if self.rpn.is_empty_list(self.stack):
-            raise ValueError("stack is empty")
-        return self.rpn.car(self.stack)
 
 
 ## }}}
@@ -249,8 +278,8 @@ class Frame:
 
     ## this is just a c struct and it doesn't use list primitives for attr storage
 
-    def __init__(self, *frames, **kw):
-        for frame in frames:
+    def __init__(self, frame=None, **kw):
+        if frame:
             self.__dict__.update(frame.__dict__)
         self.__dict__.update(kw)
 
@@ -260,8 +289,8 @@ class Frame:
 
 
 class FrameStack(Stack):
-    def push(self, *frames, **kw):
-        super().push(Frame(*frames, **kw))
+    def push(self, frame=None, **kw):
+        super().push(Frame(frame, **kw))
 
 
 ## }}}
@@ -295,9 +324,9 @@ class Queue:
         return self.rpn.set_cdr(self.ht, new)
 
     def dequeue(self):
-        if self.rpn.is_empty_list(self.head()):
-            raise ValueError("queue is empty")
         head = self.head()
+        if self.rpn.is_empty_list(head):
+            raise ValueError("queue is empty")
         ret, head = self.rpn.car(head), self.rpn.cdr(head)
         self.head(head)
         if self.rpn.is_empty_list(head):
