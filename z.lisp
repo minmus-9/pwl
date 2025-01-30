@@ -454,7 +454,7 @@
         (cond
             ((eq? op 'enqueue)
                 (if
-                    (equal? (length args ) 1)
+                    (equal? (length args) 1)
                     ( do
                         (define node (cons (car args) ()))
                         (if
@@ -470,19 +470,19 @@
             )
             ((eq? op 'dequeue)
                 (if
-                    (equal? (length args) 0)
-                        (if
-                            (null? h)
-                            (error "queue is empty")
-                            ( let (
-                                (ret (car h)))
-                                (do
-                                    (set! h (cdr h))
-                                    (if (null? h) (set! t ()) ())
-                                    ret
-                                )
+                    (null? args)
+                    (if
+                        (null? h)
+                        (error "queue is empty")
+                        ( let (
+                            (ret (car h)))
+                            (do
+                                (set! h (cdr h))
+                                (if (null? h) (set! t ()) ())
+                                ret
                             )
                         )
+                    )
                     (error "dequeue takes no args")
                 )
             )
@@ -503,6 +503,12 @@
     dispatch
 )
 
+(define q (queue))
+(q 'enqueue 1)
+(q 'enqueue 2)
+(q 'enqueue 3)
+(q 'get-all)
+(exit 0)
 
 ;; }}}
 ;; {{{ let
