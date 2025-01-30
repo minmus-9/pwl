@@ -477,6 +477,7 @@ def stringify(x):
 
 
 def leval(x, e=None):
+    ## pylint: disable=too-many-branches
     e = glbls if e is None else e
     if is_symbol(x):
         obj = e.get(x, SENTINEL)
