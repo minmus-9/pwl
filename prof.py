@@ -42,11 +42,13 @@ PROFILE = "/dev/shm/profile"
 
 if 1:
     cProfile.run("""
-import lwp
+from lwp import main
+from z import main
 import sys
 sys.argv[1:] = ["lwp.lisp", "sicp.lisp", "t.lisp"]
-#sys.argv[1:] = ["lwp.lisp", "sicp.lisp"]
-lwp.main()
+sys.argv[1:] = ["lwp.lisp", "sicp.lisp"]
+sys.argv[1:] = ["z.lisp", "sicp.lisp"]
+main()
     """, PROFILE)
 
 pstats.Stats(PROFILE).strip_dirs().sort_stats("tottime").print_stats(.15)

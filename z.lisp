@@ -444,6 +444,56 @@
 )
 
 ;; }}}
+;; {{{ let
+
+(special let (lambda (__special_let_vdefs__ __special_let_body__)
+    (eval (let$ __special_let_vdefs__ __special_let_body__) 1)))
+
+(def (let$ vdefs body)
+    (define vdecls (transpose vdefs))
+    (define vars (car vdecls))
+    (define vals (cadr vdecls))
+    `((lambda (,@vars) ,body) ,@vals)
+)
+
+;; }}}
+;; {{{ let*
+
+(special let* (lambda (__special_lets_vdefs__ __special_lets_body__)
+    (eval (let*$ __special_lets_vdefs__ __special_lets_body__) 1)))
+
+(def (let*$ vdefs body)
+    (if
+        (null? vdefs)
+        body
+        ( do
+            (define kv (car vdefs))
+            (set! vdefs (cdr vdefs))
+            (define k (car kv))
+            (define v (cadr kv))
+          `((lambda (,k) ,(let*$ vdefs body)) ,v)
+        )
+    )
+)
+
+;; }}}
+;; {{{ letrec
+;; i saw this (define x ()) ... (set! x value) on stackoverflow somewhere
+
+(special letrec (lambda (__special_letrec_decls__ __special_letrec_body__)
+    (eval (letrec$ __special_letrec_decls__ __special_letrec_body__) 1)))
+
+(def (letrec$ decls & body)
+    (define names (map1 car decls))
+    (define values (map1 cadr decls))
+    (def (declare var) `(define ,var ()))
+    (def (initialize var-value) `(set! ,(car var-value) ,(cadr var-value)))
+    (def (declare-all) (map1 declare names))
+    (def (initialize-all) (map1 initialize decls))
+    `((lambda () ( do ,@(declare-all) ,@(initialize-all) ,@body)))
+)
+
+;; }}}
 ;; {{{ queue
 
 (def (queue)
@@ -501,63 +551,6 @@
         )
     )
     dispatch
-)
-
-(define q (queue))
-(q 'enqueue 1)
-(q 'enqueue 2)
-(q 'enqueue 3)
-(q 'get-all)
-(exit 0)
-
-;; }}}
-;; {{{ let
-
-(special let (lambda (__special_let_vdefs__ __special_let_body__)
-    (eval (let$ __special_let_vdefs__ __special_let_body__) 1)))
-
-(def (let$ vdefs body)
-    (define vdecls (transpose vdefs))
-    (define vars (car vdecls))
-    (define vals (cadr vdecls))
-    `((lambda (,@vars) ,body) ,@vals)
-)
-
-;; }}}
-;; {{{ let*
-
-(special let* (lambda (__special_lets_vdefs__ __special_lets_body__)
-    (eval (let*$ __special_lets_vdefs__ __special_lets_body__) 1)))
-
-(def (let*$ vdefs body)
-    (if
-        (null? vdefs)
-        body
-        ( do
-            (define kv (car vdefs))
-            (set! vdefs (cdr vdefs))
-            (define k (car kv))
-            (define v (cadr kv))
-          `((lambda (,k) ,(let*$ vdefs body)) ,v)
-        )
-    )
-)
-
-;; }}}
-;; {{{ letrec
-;; i saw this (define x ()) ... (set! x value) on stackoverflow somewhere
-
-(special letrec (lambda (__special_letrec_decls__ __special_letrec_body__)
-    (eval (letrec$ __special_letrec_decls__ __special_letrec_body__) 1)))
-
-(def (letrec$ decls & body)
-    (define names (map1 car decls))
-    (define values (map1 cadr decls))
-    (def (declare var) `(define ,var ()))
-    (def (initialize var-value) `(set! ,(car var-value) ,(cadr var-value)))
-    (def (declare-all) (map1 declare names))
-    (def (initialize-all) (map1 initialize decls))
-    `((lambda () ( do ,@(declare-all) ,@(initialize-all) ,@body)))
 )
 
 ;; }}}
@@ -648,7 +641,7 @@
 )
 
 ;; }}}
-;; {{{ looping: loop, while, until, for
+;; {{{ looping: loop, for, iter-func
 
 ;; call f in a loop forever
 (def (loop f)
@@ -693,23 +686,33 @@
 ;; {{{ gcd
 
 (def (gcd x y)
-    (def (run x y)
+    (define g 1)
+    (def (run)
         (if
             (equal? y 0)
-            x
-            (run y (mod x y))
+            (do
+                (set! g x)
+                ()
+            )
+            (do
+                (define r (mod x y))
+                (set! x y)
+                (set! y r)
+                #t
+            )
         )
     )
     (cond
         ((lt? x y) (gcd y x))
         ((equal? y 0) x)
         ((equal? x 0) 1)
-        (#t (run x y))
+        (#t (do
+          (while run)
+          g
+        ))
     )
 )
 
 ;; }}}
-
-(iter-func (lambda (_) 42) 0 1000)
 
 ;; EOF
