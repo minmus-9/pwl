@@ -180,6 +180,8 @@ def car(x):
 
 
 def cdr(x):
+    if is_empty_list(x):
+        return EL
     if not is_pair(x):
         raise TypeError(f"expected pair, got {x!r}")
     return x.cdr()
@@ -347,6 +349,21 @@ class Environment(dict):
         if not is_empty_list(args):
             te("too many args")
 
+    def __delitem__(self, key):
+        if not is_symbol(key):
+            raise TypeError(f"expected symbol, got {key!r}")
+        return super().__delitem__(key)
+
+    def __getitem__(self, key):
+        if not is_symbol(key):
+            raise TypeError(f"expected symbol, got {key!r}")
+        return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if not is_symbol(key):
+            raise TypeError(f"expected symbol, got {key!r}")
+        super().__setitem__(key, value)
+
     def get(self, key, default):
         if not is_symbol(key):
             raise TypeError(f"expected symbol, got {key!r}")
@@ -380,7 +397,7 @@ glbls[symbol("#t")] = T
 
 def glbl(name):
     def wrap(func):
-        glbls[name] = func
+        glbls[symbol(name)] = func
         return func
 
     return wrap
@@ -388,8 +405,17 @@ def glbl(name):
 
 def spcl(name):
     def wrap(func):
-        glbls[name] = func
+        glbls[symbol(name)] = func
         func.special = True
+        return func
+
+    return wrap
+
+
+def ffi(name):
+    def wrap(func):
+        glbls[symbol(name)] = func
+        func.ffi = True
         return func
 
     return wrap
@@ -481,7 +507,48 @@ def leval(x, e=None):
         args = cdr(args)
     if not is_empty_list(args):
         lb.adjoin(args)
+    if getattr(proc, "ffi", False):
+        return do_ffi(proc, lb.get(), e)
     return proc(lb.get(), e)
+
+
+## }}}
+## {{{ ffi support
+
+
+def do_ffi(proc, args, e):
+    return py_to_lisp(proc(lisp_to_py(args), e))
+
+
+def lisp_to_py(args):
+    ret = []
+    while is_pair(args):
+        x = car(args)
+        args = cdr(args)
+        if is_empty_list(x):
+            ret.append(None)
+        elif is_true(x):
+            ret.append(True)
+        elif not is_pair(x):
+            ret.append(x)
+        else:
+            ret.append(lisp_to_py(x))
+    if not is_empty_list(args):
+        raise ValueError("ffi can only take a proper list")
+    return ret
+
+
+def py_to_lisp(x):
+    if x is None:
+        return EL
+    if x is True:
+        return T
+    if not isinstance(x, (list, tuple)):
+        return x
+    lb = ListBuilder()
+    for z in x:
+        lb.append(py_to_lisp(z))
+    return lb.get()
 
 
 ## }}}
@@ -808,9 +875,6 @@ def op_trap(args, e):
 ## {{{ quasiquote
 
 
-QQ = Stack()
-
-
 def qq_list(form, e):
     lb = ListBuilder()
     while is_pair(form):
@@ -820,6 +884,8 @@ def qq_list(form, e):
             lb.extend(leval(x, e))
         else:
             lb.append(qq(elt, e))
+    if not is_empty_list(form):
+        lb.adjoin(qq(form, e))
     return lb.get()
 
 
@@ -1014,6 +1080,67 @@ def op_while(args, e):
     while not is_empty_list(leval(x, e)):
         pass
     return EL
+
+
+## }}}
+## {{{ ffi
+
+
+def module_ffi(module, attr, args):
+    if is_symbol(attr):
+        attr = str(attr)
+    elif not isinstance(attr, str):
+        raise TypeError(f"expeceted str or symbol, got {attr!r}")
+    ret = getattr(module, attr)
+    if callable(ret):
+        return ret(*args)
+    if args:
+        raise ValueError(f"{attr} takes no args")
+    return ret
+
+
+@ffi("math")
+def ffi_math(args, _):
+    import math  ## pylint: disable=import-outside-toplevel
+
+    if not args:
+        raise ValueError("at least one arg required")
+    return module_ffi(math, args[0], args[1:])
+
+
+@ffi("random")
+def ffi_random(args, _):
+    import random  ## pylint: disable=import-outside-toplevel
+
+    if not args:
+        raise ValueError("at least one arg required")
+    return module_ffi(random, args[0], args[1:])
+
+
+@ffi("range")
+def ffi_range(args, _):
+    return list(range(*args))
+
+
+@ffi("shuffle")
+def ffi_shuffle(args, _):
+    import random  ## pylint: disable=import-outside-toplevel
+
+    (l,) = args
+    random.shuffle(l)
+    return l
+
+
+@ffi("time")
+def ffi_time(args, _):
+    import time  ## pylint: disable=import-outside-toplevel
+
+    if not args:
+        raise ValueError("at least one arg required")
+    ## time* brokers in time tuples not lists...
+    attr = args[0]
+    args = [tuple(x) if isinstance(x, list) else x for x in args[1:]]
+    return module_ffi(time, attr, args)
 
 
 ## }}}

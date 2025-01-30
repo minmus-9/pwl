@@ -714,5 +714,63 @@
 )
 
 ;; }}}
+;; {{{ benchmarking
+
+(def (timeit f n)
+    (define t0 (time 'time))
+    (for f 0 n 1)
+    (define t1 (time 'time))
+    (define dt (sub t1 t0))
+    (if (lt? dt 1e-7) (set! dt 1e-7) ())
+    (if (lt? n 1) (set! n 1) ())
+    (list n dt (mul 1e6 (div dt n)) (div n dt))
+)
+
+;; }}}
+;; {{{ factorial benchmark
+
+(def (!bench)
+    (def (!1  n)
+        (def (f x)
+            (cons
+                (mul (car x) (cdr x))
+                (sub (cdr x) 1)
+            )
+        )
+        (car (iter-func f (cons 1 n) n))
+    )
+
+    (def (!2 n)
+        (define n! 1)
+        (def (f)
+            (if
+                (lt? n 2)
+                ()
+                (do
+                    (set! n! (mul n! n))
+                    (set! n  (sub n 1))
+                    #t
+                )
+            )
+        )
+        (while f)
+        n!
+    )
+
+    (def (!3 n)
+        (if
+            (lt? n 2)
+            1
+            (mul n (!3 (sub n 1)))
+        )
+    )
+
+    (print (timeit (lambda (_) (!1 100)) 10))
+    (print (timeit (lambda (_) (!2 100)) 10))
+    (print (timeit (lambda (_) (!3 60)) 10))
+)
+(timeit (lambda (_) (!bench)) 1)
+
+;; }}}
 
 ;; EOF
