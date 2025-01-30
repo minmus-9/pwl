@@ -765,9 +765,49 @@
         )
     )
 
-    (print (timeit (lambda (_) (!1 100)) 10))
-    (print (timeit (lambda (_) (!2 100)) 10))
-    (print (timeit (lambda (_) (!3 60)) 10))
+    (def (!4 n)
+         (define n! 1)
+         (def (f k) (set! n! (mul n! k)))
+         (for f 1 n 1)
+         n!
+    )
+
+    (def (!5 n)
+        (def (iter n! k)
+            (if
+                (lt? k 2)
+                n!
+                (iter (mul n! k) (sub k 1))
+            )
+        )
+        (iter 1 n)
+    )
+
+    (def (!6 n)
+         (math 'factorial n)
+    )
+
+    (def (!7 n)
+        (fold-left mul 2 (range 3 (add n 1) 1))
+    )
+
+    (def (!8 n)
+        (def (f x)
+            (set! n (sub n 1))
+            (mul n x)
+        )
+        (iter-func f n (sub n 1))
+    )
+
+    (print "nil" (timeit (lambda (_) ()) 100))
+    (print "!1 " (timeit (lambda (_) (!1 100)) 10))
+    (print "!2 " (timeit (lambda (_) (!2 100)) 10))
+    (print "!3 " (timeit (lambda (_) (!3  60)) 10))
+    (print "!4 " (timeit (lambda (_) (!4 100)) 10))
+    (print "!5 " (timeit (lambda (_) (!5 100)) 10))
+    (print "!6 " (timeit (lambda (_) (!6 100)) 10))
+    (print "!7 " (timeit (lambda (_) (!7 100)) 10))
+    (print "!8 " (timeit (lambda (_) (!8 100)) 10))
 )
 (timeit (lambda (_) (!bench)) 1)
 
