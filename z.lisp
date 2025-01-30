@@ -39,23 +39,36 @@
 ;; }}}
 ;; {{{ last
 
+(define do$2 (lambda (a b) (if a b b)))
+
 (define last (lambda (l)
     (if
         (null? l)
         ()
-        (if
-            (null? (cdr l))
-            (car l)
-            (last (cdr l))
+        (do$2
+            (define res ())
+            (do$2
+                (define f (lambda ()
+                    (if
+                        (null? (cdr l))
+                        (do$2
+                            (set! res (car l))
+                            ()
+                        )
+                        (do$2
+                            (set! l (cdr l))
+                            #t
+                        )
+                    )
+                ))
+                (do$2
+                    (while f)
+                    res
+                )
+            )
         )
     )
 ))
-
-;; }}}
-;; {{{ begin/do
-
-(define do (lambda (& args) (last args)))
-(define begin do)
 
 ;; }}}
 ;; {{{ foreach
@@ -809,7 +822,8 @@
     (print "!7 " (timeit (lambda (_) (!7 100)) 10))
     (print "!8 " (timeit (lambda (_) (!8 100)) 10))
 )
-(timeit (lambda (_) (!bench)) 1)
+
+(def (bench) (cadr (timeit (lambda (_) (!bench)) 1)))
 
 ;; }}}
 

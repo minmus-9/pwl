@@ -819,6 +819,19 @@ def op_define(args, e):
     return EL
 
 
+@spcl("do")
+def op_do(args, e):
+    if is_empty_list(args):
+        return EL
+    ret = EL
+    while is_pair(args):
+        x, args = car(args), cdr(args)
+        ret = leval(x, e)
+    if not is_empty_list(args):
+        raise TypeError("malformed args in do")
+    return ret
+
+
 @spcl("if")
 def op_if(args, e):
     p, c, a = unpack(args, 3)
