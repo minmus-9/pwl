@@ -812,18 +812,25 @@
         (iter-func f n (sub n 1))
     )
 
-    (print "nil" (timeit (lambda (_) ()) 100))
-    (print "!1 " (timeit (lambda (_) (!1 100)) 10))
-    (print "!2 " (timeit (lambda (_) (!2 100)) 10))
-    (print "!3 " (timeit (lambda (_) (!3  60)) 10))
-    (print "!4 " (timeit (lambda (_) (!4 100)) 10))
-    (print "!5 " (timeit (lambda (_) (!5 100)) 10))
-    (print "!6 " (timeit (lambda (_) (!6 100)) 10))
-    (print "!7 " (timeit (lambda (_) (!7 100)) 10))
-    (print "!8 " (timeit (lambda (_) (!8 100)) 10))
+    (define n 100)
+    (define reps 50)
+
+    (print "nil" (timeit (lambda (_) ()) reps))
+    (print "!1 " (timeit (lambda (_) (!1 n)) reps))
+    (print "!2 " (timeit (lambda (_) (!2 n)) reps))
+    (print "!3 " (timeit (lambda (_) (!3 60)) reps))
+    (print "!4 " (timeit (lambda (_) (!4 n)) reps))
+    (print "!5 " (timeit (lambda (_) (!5 60)) reps))
+    (print "!6 " (timeit (lambda (_) (!6 n)) reps))
+    (print "!7 " (timeit (lambda (_) (!7 n)) reps))
+    (print "!8 " (timeit (lambda (_) (!8 n)) reps))
 )
 
 (def (bench) (cadr (timeit (lambda (_) (!bench)) 1)))
+
+;;   home slow  4.24    723fc03131132b523971114b112e95143e989664
+
+(bench)
 
 ;; }}}
 

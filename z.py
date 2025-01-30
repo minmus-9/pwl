@@ -36,10 +36,6 @@ __all__ = (
     "EL",
     "T",
     "symbol",
-    "is_empty_list",
-    "is_true",
-    "is_symbol",
-    "is_atom",
     "eq",
     "Pair",
     "car",
@@ -47,11 +43,6 @@ __all__ = (
     "cons",
     "set_car",
     "set_cdr",
-    "is_pair",
-    "is_integer",
-    "is_float",
-    "is_number",
-    "is_string",
     "ltype",
     "ListBuilder",
     "Stack",
@@ -106,10 +97,6 @@ EL = EL_()
 del EL_
 
 
-def is_empty_list(x):
-    return x is EL
-
-
 class T_:
     ## pylint: disable=too-few-public-methods
 
@@ -121,16 +108,8 @@ T = T_()
 del T_
 
 
-def is_true(x):
-    return x is T
-
-
 class Symbol(str):
     ...
-
-
-def is_symbol(x):
-    return isinstance(x, Symbol)
 
 
 class SymbolTable(dict):
@@ -146,7 +125,7 @@ del SymbolTable
 
 
 def is_atom(x):
-    return is_symbol(x) or is_empty_list(x) or is_true(x)
+    return isinstance(x, Symbol) or x is EL or x is T
 
 
 def eq(x, y):
@@ -174,15 +153,15 @@ class Pair(list):
 
 
 def car(x):
-    if not is_pair(x):
+    if not isinstance(x, Pair):
         raise TypeError(f"expected pair, got {x!r}")
     return x.car()
 
 
 def cdr(x):
-    if is_empty_list(x):
+    if x is EL:
         return EL
-    if not is_pair(x):
+    if not isinstance(x, Pair):
         raise TypeError(f"expected pair, got {x!r}")
     return x.cdr()
 
@@ -192,31 +171,15 @@ def cons(x, y):
 
 
 def set_car(x, value):
-    if not is_pair(x):
+    if not isinstance(x, Pair):
         raise TypeError(f"expected pair, got {x!r}")
     return x.set_car(value)
 
 
 def set_cdr(x, value):
-    if not is_pair(x):
+    if not isinstance(x, Pair):
         raise TypeError(f"expected pair, got {x!r}")
     return x.set_cdr(value)
-
-
-def is_pair(x):
-    return isinstance(x, Pair)
-
-
-def is_integer(x):
-    return isinstance(x, int)
-
-
-def is_float(x):
-    return isinstance(x, float)
-
-
-def is_number(x):
-    return isinstance(x, (int, float))
 
 
 def is_string(x):
@@ -225,17 +188,17 @@ def is_string(x):
 
 def ltype(x):
     ## pylint: disable=too-many-return-statements
-    if is_empty_list(x):
+    if x is EL:
         return symbol("()")
-    if is_true(x):
+    if x is T:
         return symbol("#t")
-    if is_symbol(x):
+    if isinstance(x, Symbol):
         return symbol("symbol")
-    if is_pair(x):
+    if isinstance(x, Pair):
         return symbol("pair")
-    if is_integer(x):
+    if isinstance(x, int):
         return symbol("integer")
-    if is_float(x):
+    if isinstance(x, float):
         return symbol("float")
     if is_string(x):
         return symbol("string")
@@ -255,7 +218,7 @@ class ListBuilder:
         self.h = self.t = EL
 
     def adjoin(self, x):
-        if is_empty_list(self.h):
+        if self.h is EL:
             self.h = self.t = x
         else:
             set_cdr(self.t, x)
@@ -263,7 +226,7 @@ class ListBuilder:
 
     def append(self, x):
         node = cons(x, EL)
-        if is_empty_list(self.h):
+        if self.h is EL:
             self.h = node
         else:
             set_cdr(self.t, node)
@@ -271,12 +234,12 @@ class ListBuilder:
         return EL
 
     def extend(self, seq):
-        if is_empty_list(seq):
+        if seq is EL:
             return EL
-        while is_pair(seq):
+        while isinstance(seq, Pair):
             self.append(car(seq))
             seq = cdr(seq)
-        if not is_empty_list(seq):
+        if seq is not EL:
             self.adjoin(seq)
         return EL
 
@@ -293,7 +256,7 @@ class Stack:
         self.s = EL
 
     def empty(self):
-        return is_empty_list(self.s)
+        return self.s is EL
 
     def push(self, x):
         self.s = cons(x, self.s)
@@ -328,47 +291,47 @@ class Environment(dict):
             raise TypeError(msg + f" at {pl} <= {al}")
 
         variadic = False
-        while not is_empty_list(params):
+        while params is not EL:
             p, params = car(params), cdr(params)
-            if not is_symbol(p):
+            if not isinstance(p, Symbol):
                 te(f"expected symbol, got {p!r}")
             if eq(p, symbol("&")):
                 variadic = True
             elif variadic:
-                if not is_empty_list(params):
+                if params is not EL:
                     se("extra junk after '&'")
                 self[p] = args
                 return
-            elif is_empty_list(args):
+            elif args is EL:
                 te("not enough args")
             else:
                 a, args = car(args), cdr(args)
                 self[p] = a
         if variadic:
             se("'&' ends param list")
-        if not is_empty_list(args):
+        if args is not EL:
             te("too many args")
 
     def __delitem__(self, key):
-        if not is_symbol(key):
+        if not isinstance(key, Symbol):
             raise TypeError(f"expected symbol, got {key!r}")
         return super().__delitem__(key)
 
     def __getitem__(self, key):
-        if not is_symbol(key):
+        if not isinstance(key, Symbol):
             raise TypeError(f"expected symbol, got {key!r}")
         return super().__getitem__(key)
 
     def __setitem__(self, key, value):
-        if not is_symbol(key):
+        if not isinstance(key, Symbol):
             raise TypeError(f"expected symbol, got {key!r}")
         super().__setitem__(key, value)
 
     def get(self, key, default):
-        if not is_symbol(key):
+        if not isinstance(key, Symbol):
             raise TypeError(f"expected symbol, got {key!r}")
         e = self
-        while not is_empty_list(e):
+        while e is not EL:
             try:
                 return e[key]
             except KeyError:
@@ -376,13 +339,13 @@ class Environment(dict):
         return default
 
     def setbang(self, key, value):
-        if not is_symbol(key):
+        if not isinstance(key, Symbol):
             raise TypeError(f"expected symbol, got {key!r}")
         e = self
-        while not is_empty_list(e):
+        while e is not EL:
             if key in e:
                 e[key] = value
-                return
+                return EL
             e = e.p
         raise NameError(key)
 
@@ -452,21 +415,21 @@ def is_lambda(x):
 
 
 def stringify(x):
-    if is_empty_list(x) or is_true(x):
+    if x is EL or x is T:
         return repr(x)
-    if is_symbol(x) or is_number(x) or is_string(x):
+    if isinstance(x, (Symbol, int, float, str)):
         return str(x)
-    if not is_pair(x):
+    if not isinstance(x, Pair):
         if is_lambda(x):
             return str(x)
         if callable(x):
             return "[primitive]"
         return "[opaque]"
     parts = []
-    while is_pair(x):
+    while isinstance(x, Pair):
         parts.append(stringify(car(x)))
         x = cdr(x)
-    if not is_empty_list(x):
+    if x is not EL:
         parts.append(".")
         parts.append(stringify(x))
     return "(" + " ".join(parts) + ")"
@@ -479,34 +442,34 @@ def stringify(x):
 def leval(x, e=None):
     ## pylint: disable=too-many-branches
     e = glbls if e is None else e
-    if is_symbol(x):
+    if isinstance(x, Symbol):
         obj = e.get(x, SENTINEL)
         if obj is SENTINEL:
             raise NameError(x)
         return obj
-    if is_pair(x):
+    if isinstance(x, Pair):
         sym, args = car(x), cdr(x)
-    elif is_lambda(x):
+    elif isinstance(x, Lambda):
         sym, args = x, EL
     else:
         return x
-    if is_symbol(sym):
+    if isinstance(sym, Symbol):
         op = e.get(sym, SENTINEL)
         if op is not SENTINEL and getattr(op, "special", False):
             return op(args, e)
         proc = leval(sym, e)
     elif callable(sym):
         proc = sym
-    elif not is_pair(sym):
+    elif not isinstance(sym, Pair):
         raise TypeError(f"expected proc/list, got {sym!r}")
     else:
         proc = leval(sym, e)
 
     lb = ListBuilder()
-    while is_pair(args):
+    while isinstance(args, Pair):
         lb.append(leval(car(args), e))
         args = cdr(args)
-    if not is_empty_list(args):
+    if args is not EL:
         lb.adjoin(args)
     if getattr(proc, "ffi", False):
         return do_ffi(proc, lb.get(), e)
@@ -523,18 +486,18 @@ def do_ffi(proc, args, e):
 
 def lisp_to_py(args):
     ret = []
-    while is_pair(args):
+    while isinstance(args, Pair):
         x = car(args)
         args = cdr(args)
-        if is_empty_list(x):
+        if x is EL:
             ret.append(None)
-        elif is_true(x):
+        elif x is T:
             ret.append(True)
-        elif not is_pair(x):
+        elif not isinstance(x, Pair):
             ret.append(x)
         else:
             ret.append(lisp_to_py(x))
-    if not is_empty_list(args):
+    if args is not EL:
         raise ValueError("ffi can only take a proper list")
     return ret
 
@@ -588,7 +551,7 @@ class Scanner:
     def feed(self, text):
         ## pylint: disable=too-many-branches,too-many-statements
         if text is None:
-            if not is_empty_list(self.stack):
+            if self.stack is not EL:
                 raise SyntaxError(f"eof in {car(self.stack)!r}")
             self.push(self.T_SYM)
             self.push(self.T_EOF)
@@ -646,7 +609,7 @@ class Scanner:
                 self.push(self.T_SYM)
                 self.push(self.T_LPAR)
             elif ch in ")]":
-                if is_empty_list(self.stack):
+                if self.stack is EL:
                     raise SyntaxError(f"too many {ch!r}")
                 c = car(self.stack)
                 self.stack = cdr(self.stack)
@@ -734,19 +697,19 @@ class Parser:
         lb = ListBuilder()
 
         ## NB we know this is a well-formed list
-        while not is_empty_list(sexpr):
+        while sexpr is not EL:
             elt, sexpr = car(sexpr), cdr(sexpr)
-            if is_symbol(elt) and elt in self.q_map:
+            if isinstance(elt, Symbol) and elt in self.q_map:
                 elt, sexpr = self.process_syms(elt, sexpr)
             lb.append(elt)
         return lb.get()
 
     def process_syms(self, elt, sexpr):
         replacement = self.q_map[elt]
-        if is_empty_list(sexpr):
+        if sexpr is EL:
             raise SyntaxError(f"got {elt!r} at end of list")
         quoted, sexpr = car(sexpr), cdr(sexpr)
-        if not (is_symbol(quoted) and quoted in self.q_map):
+        if not (isinstance(quoted, Symbol) and quoted in self.q_map):
             elt = cons(replacement, cons(quoted, EL))
         else:
             quoted, sexpr = self.process_syms(quoted, sexpr)
@@ -795,13 +758,13 @@ def unpack(args, n):
     al = args
     ret = []
     for _ in range(n):
-        if is_empty_list(args):
+        if args is EL:
             raise TypeError(f"not enough args, need {n} from {al!r}")
-        if not is_pair(args):
+        if not isinstance(args, Pair):
             raise TypeError(f"malformed args, need {n} from {al!r}")
         ret.append(car(args))
         args = cdr(args)
-    if not is_empty_list(args):
+    if args is not EL:
         raise TypeError(f"too many args, need {n} from {al!r}")
     return ret
 
@@ -813,7 +776,7 @@ def unpack(args, n):
 @spcl("define")
 def op_define(args, e):
     name, value = unpack(args, 2)
-    if not is_symbol(name):
+    if not isinstance(name, Symbol):
         raise TypeError(f"expected symbol, got {name!r}")
     e[name] = leval(value, e)
     return EL
@@ -821,13 +784,13 @@ def op_define(args, e):
 
 @spcl("do")
 def op_do(args, e):
-    if is_empty_list(args):
+    if args is EL:
         return EL
     ret = EL
-    while is_pair(args):
+    while isinstance(args, Pair):
         x, args = car(args), cdr(args)
         ret = leval(x, e)
-    if not is_empty_list(args):
+    if args is not EL:
         raise TypeError("malformed args in do")
     return ret
 
@@ -835,7 +798,7 @@ def op_do(args, e):
 @spcl("if")
 def op_if(args, e):
     p, c, a = unpack(args, 3)
-    if is_empty_list(leval(p, e)):
+    if leval(p, e) is EL:
         return leval(a, e)
     return leval(c, e)
 
@@ -855,7 +818,7 @@ def op_quote(args, _):
 @spcl("set!")
 def op_setbang(args, e):
     name, value = unpack(args, 2)
-    if not is_symbol(name):
+    if not isinstance(name, Symbol):
         raise TypeError(f"expected symbol, got {name!r}")
     e.setbang(name, leval(value, e))
     return EL
@@ -864,7 +827,7 @@ def op_setbang(args, e):
 @spcl("special")
 def op_special(args, e):
     name, value = unpack(args, 2)
-    if not is_symbol(name):
+    if not isinstance(name, Symbol):
         raise TypeError(f"expected symbol, got {name!r}")
     value = leval(value, e)
     value.special = True  ## pylint: disable=attribute-defined-outside-init
@@ -891,14 +854,14 @@ def op_trap(args, e):
 
 def qq_list(form, e):
     lb = ListBuilder()
-    while is_pair(form):
+    while isinstance(form, Pair):
         elt, form = car(form), cdr(form)
-        if is_pair(elt) and eq(car(elt), symbol("unquote-splicing")):
+        if isinstance(elt, Pair) and eq(car(elt), symbol("unquote-splicing")):
             _, x = unpack(elt, 2)
             lb.extend(leval(x, e))
         else:
             lb.append(qq(elt, e))
-    if not is_empty_list(form):
+    if form is not EL:
         lb.adjoin(qq(form, e))
     return lb.get()
 
@@ -918,7 +881,7 @@ def qq_pair(form, e):
 
 
 def qq(form, e):
-    return qq_pair(form, e) if is_pair(form) else form
+    return qq_pair(form, e) if isinstance(form, Pair) else form
 
 
 @spcl("quasiquote")
@@ -970,7 +933,7 @@ def op_cons(args, _):
 @glbl("div")
 def op_div(args, _):
     def f(x, y):
-        if is_integer(x) and is_integer(y):
+        if isinstance(x, int) and isinstance(y, int):
             return x // y
         return x / y
 
@@ -1014,16 +977,16 @@ def op_eval(args, e):
         p.feed(None)
         x = l[-1] if l else EL
     for _ in range(n_up):
-        if is_empty_list(e):
-            raise ValueError(f"cannot go up {n_up} levels")
         e = e.p
+        if e is EL:
+            raise ValueError(f"cannot go up {n_up} levels")
     return leval(x, e)
 
 
 @glbl("exit")
 def op_exit(args, _):
     (x,) = unpack(args, 1)
-    if is_integer(x):
+    if isinstance(x, int):
         raise SystemExit(x)
     raise SystemExit(stringify(x))
 
@@ -1051,16 +1014,16 @@ def op_nand(args, _):
 
 @glbl("print")
 def op_print(args, _):
-    if is_empty_list(args):
+    if args is EL:
         print()
         return EL
     end = " "
-    while is_pair(args):
+    while isinstance(args, Pair):
         x, args = car(args), cdr(args)
-        if is_empty_list(args):
+        if args is EL:
             end = "\n"
         print(stringify(x), end=end)
-    if not is_empty_list(args):
+    if args is not EL:
         print(".", stringify(x))
     return EL
 
@@ -1091,7 +1054,7 @@ def op_while(args, e):
     if not callable(x):
         raise TypeError(f"expected callable, got {x!r}")
 
-    while not is_empty_list(leval(x, e)):
+    while leval(x, e) is not EL:
         pass
     return EL
 
@@ -1101,7 +1064,7 @@ def op_while(args, e):
 
 
 def module_ffi(module, attr, args):
-    if is_symbol(attr):
+    if isinstance(attr, Symbol):
         attr = str(attr)
     elif not isinstance(attr, str):
         raise TypeError(f"expeceted str or symbol, got {attr!r}")
@@ -1206,7 +1169,7 @@ def main(force_repl=False):
             print("Offender (pyth):", sexpr)
             print("Offender (lisp):", stringify(sexpr), "\n")
             raise
-        if not is_empty_list(value):
+        if value is not EL:
             print(stringify(value))
 
     stop = True
