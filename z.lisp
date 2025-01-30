@@ -66,7 +66,11 @@
         (if
             (null? lst)
             ()
-            (if (f) #t #t)
+            ( do
+                (f (car lst))
+                (set! lst (cdr lst))
+                #t
+            )
         )
     ))
     (while g)
@@ -309,35 +313,30 @@
 ;; {{{ join
 
 (def (join x y)
-    (cond
-        ((null? x) y)
-        ((null? y) x)
-        ((null? (cdr x)) (cons (car x) y))
-        (#t (cons (car x) (join (cdr x) y)))
-    )
-)
-
-(def (join x y)
     (define lb (list-builder))
-    (cond
-        ((null? x) y)
-        ((null? y) x)
-        ((null? (cdr x)) (cons (car x) y))
-        (#t (do
-            
-        ))
-        (#t (cons (car x) (join (cdr x) y)))
-    )
+    (lb 'extend x)
+    (lb 'extend y)
+    (lb 'get)
+)
 
 ;; }}}
 ;; {{{ reverse
 
 (def (reverse l)
-    (if
-        (null? l)
-        ()
-        (join (reverse (cdr l)) (list (car l)))
+    (define res ())
+    (def (f)
+        (if
+            (null? l)
+            ()
+            (do 
+                (set! res (cons (car l) res))
+                (set! l (cdr l))
+                #t
+            )
+        )
     )
+    (while f)
+    res
 )
 
 ;; }}}
@@ -386,11 +385,20 @@
 ;; {{{ length
 
 (def (length l)
-    (if
-        (null? l)
-        0
-        (add 1 (length (cdr l)))
+    (define n 0)
+    (def (f)
+        (if
+            (null? l)
+            ()
+            (do
+                (set! n (add n 1))
+                (set! l (cdr l))
+                #t
+            )
+        )
     )
+    (while f)
+    n
 )
 
 ;; }}}
