@@ -61,15 +61,15 @@
 ;; {{{ foreach
 ;; call f for each element of lst
 
-(define foreach (lambda (f lst) ( do
-    (if
-        (null? lst)
-        ()
-        ( do
-            (f (car lst))
-            (foreach f (cdr lst))
+(define foreach (lambda (f lst) (do
+    (define g (lambda ()
+        (if
+            (null? lst)
+            ()
+            (if (f) #t #t)
         )
-    )
+    ))
+    (while g)
 )))
 
 ;; }}}
@@ -306,6 +306,30 @@
 ))
 
 ;; }}}
+;; {{{ join
+
+(def (join x y)
+    (cond
+        ((null? x) y)
+        ((null? y) x)
+        ((null? (cdr x)) (cons (car x) y))
+        (#t (cons (car x) (join (cdr x) y)))
+    )
+)
+
+(def (join x y)
+    (define lb (list-builder))
+    (cond
+        ((null? x) y)
+        ((null? y) x)
+        ((null? (cdr x)) (cons (car x) y))
+        (#t (do
+            
+        ))
+        (#t (cons (car x) (join (cdr x) y)))
+    )
+
+;; }}}
 ;; {{{ reverse
 
 (def (reverse l)
@@ -409,18 +433,6 @@
 (def (map f & lists)
     (def (g tuple) (apply f tuple))
     (map1 g (transpose lists))
-)
-
-;; }}}
-;; {{{ join
-
-(def (join x y)
-    (cond
-        ((null? x) y)
-        ((null? y) x)
-        ((null? (cdr x)) (cons (car x) y))
-        (#t (fold-right cons (fold-right cons () y) x))
-    )
 )
 
 ;; }}}
