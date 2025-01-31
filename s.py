@@ -5,11 +5,30 @@
 ## pylint: disable=invalid-name
 ## XXX pylint: disable=missing-docstring
 
+import cProfile
 import locale
+import os
+import pstats
 import time
 
 from z import EL, cons, car, cdr, symbol, eq
 
+def f8(x):
+    tw = int(x)
+    x  = (x - tw) * 1e3
+    ms = int(x)
+    x  = (x - ms) * 1e3
+    us = int(x)
+    ns = int((x - us) * 1e3)
+    return "%d.%03d_%03d_%03d" % (tw, ms, us, ns)
+
+pstats.f8 = f8
+
+PROFILE = "/dev/shm/mhh"
+try:
+    os.unlink(PROFILE)
+except os.error:
+    pass
 
 class CurrentScanner:
     T_SYM = "sym"
@@ -328,12 +347,21 @@ def timeit(klass, n):
 
 
 def test():
-    print(timeit(CurrentScanner, 40))  ## pg4 31ms
-    print(timeit(NewScanner, 40))  ## pg4 31ms
+    if 0:
+        n = 40
+        print(timeit(CurrentScanner, n))
+        print(timeit(NewScanner, n))
+    else:
+        n = 100
+        print(timeit(NewScanner, n))
 
 
 if __name__ == "__main__":
-    test()
+    cProfile.run("""
+test()
+    """, PROFILE)
+
+    pstats.Stats(PROFILE).strip_dirs().sort_stats("tottime").print_stats(.15)
 
 
 ## EOF
