@@ -829,6 +829,7 @@
 (def (bench) (cadr (timeit (lambda (_) (!bench)) 1)))
 
 ;;   home slow  4.24    723fc03131132b523971114b112e95143e989664
+;;              3.15    6d51d855dbf9de31586dbe520b98a41a84ac7091
 
 (bench)
 

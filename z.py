@@ -51,7 +51,6 @@ __all__ = (
     "glbl",
     "spcl",
     "Lambda",
-    "is_lambda",
     "stringify",
     "leval",
     "Scanner",
@@ -202,7 +201,7 @@ def ltype(x):
         return symbol("float")
     if is_string(x):
         return symbol("string")
-    if is_lambda(x):
+    if isinstance(x, Lambda):
         return symbol("lambda")
     if callable(x):
         return symbol("primitive")
@@ -406,10 +405,6 @@ class Lambda:
         return "(lambda " + stringify(self.p) + " " + stringify(self.b) + ")"
 
 
-def is_lambda(x):
-    return isinstance(x, Lambda)
-
-
 ## }}}
 ## {{{ stringify
 
@@ -420,7 +415,7 @@ def stringify(x):
     if isinstance(x, (Symbol, int, float, str)):
         return str(x)
     if not isinstance(x, Pair):
-        if is_lambda(x):
+        if isinstance(x, Lambda):
             return str(x)
         if callable(x):
             return "[primitive]"
@@ -470,7 +465,7 @@ def leval(x, e=None):
         lb.append(leval(car(args), e))
         args = cdr(args)
     if args is not EL:
-        lb.adjoin(args)
+        lb.adjoin(leval(args, e))
     if getattr(proc, "ffi", False):
         return do_ffi(proc, lb.get(), e)
     return proc(lb.get(), e)
