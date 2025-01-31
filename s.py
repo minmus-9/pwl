@@ -179,15 +179,15 @@ class NewScanner:
         self.state = self.S_SYM
         self.stack = ""
         self.c_map = {
+            "(": self.c_lpar,
+            ")": self.c_rpar,
+            "[": self.c_lbrack,
+            "]": self.c_rbrack,
             ";": self.c_cmnt,
             "'": self.c_tick,
             "`": self.c_backtick,
             ",": self.c_comma,
             '"': self.c_quote,
-            "(": self.c_lpar,
-            "[": self.c_lbrack,
-            "]": self.c_rbrack,
-            ")": self.c_rpar,
         }
         self.lookup = self.c_map.get
         self.s_map = {
@@ -266,7 +266,6 @@ class NewScanner:
             self.push(self.T_COMMA_AT)
         else:
             self.push(self.T_COMMA)
-            assert self.pos > 0
             self.pos -= 1
         self.state = self.S_SYM
 
