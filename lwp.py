@@ -103,8 +103,15 @@ class Representation:
     def is_true(self, x):
         return x is self.T
 
-    class Symbol(str):
-        ...
+    class Symbol:
+        ## pylint: disable=too-few-public-methods
+
+        def __init__(self, s):
+            assert type(s) is str and s  ## pylint: disable=unidiomatic-typecheck
+            self.s = s
+
+        def __str__(self):
+            return self.s
 
     ## symbols are unique within the scope of a Representation instance
 
@@ -172,15 +179,18 @@ class Representation:
             return pair.set_cdr(x)
     else:
         def set_car(self, pair, x):
+            ## pylint: disable=no-self-use
             return pair.set_car(x)
 
         def set_cdr(self, pair, x):
+            ## pylint: disable=no-self-use
             return pair.set_cdr(x)
 
     ## string
 
     def is_string(self, x):
-        return isinstance(x, str) and not self.is_symbol(x)
+        ## pylint: disable=no-self-use
+        return isinstance(x, str)
 
     def string_equal(self, s1, s2):
         assert self.is_string(s1) and self.is_string(s2)
@@ -295,7 +305,7 @@ class Frame:
 
     ## this is just a c struct and it doesn't use list primitives for attr storage
 
-    def __init__(self, frame=None, **kw):
+    def __init__(self, frame, **kw):
         if frame:
             self.__dict__.update(frame.__dict__)
         self.__dict__.update(kw)
@@ -306,8 +316,8 @@ class Frame:
 
 
 class FrameStack(Stack):
-    def push(self, frame=None, **kw):
-        super().push(Frame(frame, **kw))
+    def push(self, x, **kw):
+        super().push(Frame(x, **kw))
 
 
 ## }}}
@@ -655,7 +665,7 @@ class Globals:
 
     def stringify(self, sexpr, genv=SENTINEL):
         e = self.genv if genv is SENTINEL else genv
-        return trampoline(self.stringify_, self, Frame(x=sexpr, e=e, c=land))[
+        return trampoline(self.stringify_, self, Frame(None, x=sexpr, e=e, c=land))[
             1
         ]
 
@@ -726,7 +736,7 @@ class Globals:
 
     def eval(self, sexpr, genv=SENTINEL):
         e = self.genv if genv is SENTINEL else genv
-        return trampoline(self.eval_, self, Frame(x=sexpr, e=e, c=land))[1]
+        return trampoline(self.eval_, self, Frame(None, x=sexpr, e=e, c=land))[1]
 
     def eval_setup(self, frame, args):
         rpn = self.rpn
@@ -841,7 +851,7 @@ class Globals:
 
     def lisp_value_to_py_value(self, x):
         return trampoline(
-            self.lisp_value_to_py_value_, self, Frame(x=x, c=land)
+            self.lisp_value_to_py_value_, self, Frame(None, x=x, c=land)
         )[1]
 
     def lv2pv_setup(self, g, frame, args):
@@ -884,7 +894,7 @@ class Globals:
 
     def py_value_to_lisp_value(self, x):
         return trampoline(
-            self.py_value_to_lisp_value_, self, Frame(x=x, c=land)
+            self.py_value_to_lisp_value_, self, Frame(None, x=x, c=land)
         )[1]
 
     def pv2lv_setup(self, g, frame, args):

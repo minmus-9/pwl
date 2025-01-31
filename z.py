@@ -107,16 +107,28 @@ T = T_()
 del T_
 
 
-class Symbol(str):
-    ...
+class Symbol:
+    ## pylint: disable=too-few-public-methods
 
-
-class SymbolTable(dict):
-    def symbol(self, s):
+    def __init__(self, s):
         assert type(s) is str and s  ## pylint: disable=unidiomatic-typecheck
-        if s not in self:
-            self[s] = Symbol(s)
-        return self[s]
+        self.s = s
+
+    def __str__(self):
+        return self.s
+
+
+class SymbolTable:
+    ## pylint: disable=too-few-public-methods
+
+    def __init__(self):
+        self.d = {}
+
+    def symbol(self, s):
+        d = self.d
+        if s not in d:
+            d[s] = Symbol(s)
+        return d[s]
 
 
 symbol = SymbolTable().symbol
