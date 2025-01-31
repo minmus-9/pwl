@@ -11,7 +11,7 @@ import os
 import pstats
 import time
 
-from z import EL, cons, car, cdr, symbol, eq
+from z import EL, cons, car, cdr, symbol, eq, Stack, ListBuilder, Symbol
 
 def f8(x):
     tw = int(x)
@@ -29,6 +29,10 @@ try:
     os.unlink(PROFILE)
 except os.error:
     pass
+
+
+## {{{ old scanner
+
 
 class CurrentScanner:
     T_SYM = "sym"
@@ -148,7 +152,11 @@ class CurrentScanner:
         self.callback(ttype, t)
 
 
-class NewScanner:
+## }}}
+## {{{ scanner
+
+
+class Scanner:
     ##  pylint: disable=too-many-instance-attributes
 
     T_SYM = "sym"
@@ -309,7 +317,8 @@ class NewScanner:
             self.s_map[self.state](ch)
 
     def push(self, ttype):
-        t, self.token = "".join(self.token), []
+        t = "".join(self.token)
+        del self.token[:]
         if ttype == self.T_SYM:
             if not t:
                 return
@@ -325,20 +334,188 @@ class NewScanner:
         self.callback(ttype, t)
 
 
-def testit(klass):
-    def callback(ttype, t):
+## }}}
+## {{{ old parser
+
+class CurrentParser:
+    def __init__(self, callback):
+        self.callback = callback
+        self.stack = Stack()
+        self.scanner = Scanner(self.process_token)
+        self.feed = self.scanner.feed
+        self.q_map = {  ## could if-away these special cases but just use dict
+            symbol("'"): symbol("quote"),
+            symbol("`"): symbol("quasiquote"),
+            symbol(","): symbol("unquote"),
+            symbol(",@"): symbol("unquote-splicing"),
+        }
+
+    def process_token(self, ttype, token):
+        ## pylint: disable=too-many-branches
+        ## ugly, but the quickest to write
+        if ttype == self.scanner.T_SYM:
+            self.add(symbol(token))
+        elif ttype == self.scanner.T_LPAR:
+            self.stack.push(ListBuilder())
+        elif ttype == self.scanner.T_RPAR:
+            if self.stack.empty():
+                raise SyntaxError("too many ')'s")
+            lb = self.stack.pop()
+            l = self.filter(lb.get())
+            if self.stack.empty():
+                self.callback(l)
+            else:
+                self.add(l)
+        elif ttype in (
+            self.scanner.T_INT,
+            self.scanner.T_REAL,
+            self.scanner.T_STR,
+        ):
+            self.add(token)
+        elif ttype == self.scanner.T_TICK:
+            self.add(symbol("'"))
+        elif ttype == self.scanner.T_BACKTICK:
+            self.add(symbol("`"))
+        elif ttype == self.scanner.T_COMMA:
+            self.add(symbol(","))
+        elif ttype == self.scanner.T_COMMA_AT:
+            self.add(symbol(",@"))
+        elif ttype == self.scanner.T_EOF:
+            if not self.stack.empty():
+                raise SyntaxError("premature eof in '('")
+        else:
+            raise RuntimeError((ttype, token))
+
+    def add(self, x):
+        if self.stack.empty():
+            raise SyntaxError(f"expected '(' got {x!r}")
+        self.stack.top().append(x)
+
+    def filter(self, sexpr):
+        ## pylint: disable=no-self-use
+        "process ' ` , ,@"
+        lb = ListBuilder()
+
+        ## NB we know this is a well-formed list
+        while sexpr is not EL:
+            elt, sexpr = car(sexpr), cdr(sexpr)
+            if isinstance(elt, Symbol) and elt in self.q_map:
+                elt, sexpr = self.process_syms(elt, sexpr)
+            lb.append(elt)
+        return lb.get()
+
+    def process_syms(self, elt, sexpr):
+        replacement = self.q_map[elt]
+        if sexpr is EL:
+            raise SyntaxError(f"got {elt!r} at end of list")
+        quoted, sexpr = car(sexpr), cdr(sexpr)
+        if not (isinstance(quoted, Symbol) and quoted in self.q_map):
+            elt = cons(replacement, cons(quoted, EL))
+        else:
+            quoted, sexpr = self.process_syms(quoted, sexpr)
+            elt = cons(replacement, cons(quoted, EL))
+        return elt, sexpr
+
+
+## }}}
+## {{{ parser
+
+class Parser:
+    def __init__(self, callback):
+        self.callback = callback
+        self.stack = []
+        self.scanner = Scanner(self.process_token)
+        self.feed = self.scanner.feed
+        self.q_map = {  ## could if-away these special cases but just use dict
+            symbol("'"): symbol("quote"),
+            symbol("`"): symbol("quasiquote"),
+            symbol(","): symbol("unquote"),
+            symbol(",@"): symbol("unquote-splicing"),
+        }
+
+    def process_token(self, ttype, token):
+        ## pylint: disable=too-many-branches
+        ## ugly, but the quickest to write
+        if ttype == self.scanner.T_SYM:
+            self.add(symbol(token))
+        elif ttype == self.scanner.T_LPAR:
+            self.stack.append(ListBuilder())
+        elif ttype == self.scanner.T_RPAR:
+            if not self.stack:
+                raise SyntaxError("too many ')'s")
+            lb = self.stack.pop()
+            l = self.filter(lb.get())
+            if not self.stack:
+                self.callback(l)
+            else:
+                self.add(l)
+        elif ttype in (
+            self.scanner.T_INT,
+            self.scanner.T_REAL,
+            self.scanner.T_STR,
+        ):
+            self.add(token)
+        elif ttype == self.scanner.T_TICK:
+            self.add(symbol("'"))
+        elif ttype == self.scanner.T_BACKTICK:
+            self.add(symbol("`"))
+        elif ttype == self.scanner.T_COMMA:
+            self.add(symbol(","))
+        elif ttype == self.scanner.T_COMMA_AT:
+            self.add(symbol(",@"))
+        elif ttype == self.scanner.T_EOF:
+            if self.stack:
+                raise SyntaxError("premature eof in '('")
+        else:
+            raise RuntimeError((ttype, token))
+
+    def add(self, x):
+        if not self.stack:
+            raise SyntaxError(f"expected '(' got {x!r}")
+        self.stack[-1].append(x)
+
+    def filter(self, sexpr):
+        ## pylint: disable=no-self-use
+        "process ' ` , ,@"
+        lb = ListBuilder()
+
+        ## NB we know this is a well-formed list
+        while sexpr is not EL:
+            elt, sexpr = car(sexpr), cdr(sexpr)
+            if isinstance(elt, Symbol) and elt in self.q_map:
+                elt, sexpr = self.process_syms(elt, sexpr)
+            lb.append(elt)
+        return lb.get()
+
+    def process_syms(self, elt, sexpr):
+        replacement = self.q_map[elt]
+        if sexpr is EL:
+            raise SyntaxError(f"got {elt!r} at end of list")
+        quoted, sexpr = car(sexpr), cdr(sexpr)
+        if isinstance(quoted, Symbol) and quoted in self.q_map:
+            quoted, sexpr = self.process_syms(quoted, sexpr)
+        elt = cons(replacement, cons(quoted, EL))
+        return elt, sexpr
+
+
+## }}}
+
+
+def testit(klass, src):
+    def callback(expr):
         pass
 
-    s = klass(callback)
-    with open("z.lisp", "r", encoding=locale.getpreferredencoding()) as fp:
-        s.feed(fp.read())
-        s.feed(None)
+    x = klass(callback)
+    x.feed(src)
+    x.feed(None)
 
 
 def timeit(klass, n):
+    with open("z.lisp", "r", encoding=locale.getpreferredencoding()) as fp:
+        src = fp.read()
     t0 = time.time()
     for _ in range(n):
-        testit(klass)
+        testit(klass, src)
     t1 = time.time()
     dt = t1 - t0
     return n, dt, 1e6 * dt / n, n / dt
@@ -346,12 +523,12 @@ def timeit(klass, n):
 
 def test(flag):
     if flag:
-        n = 40
-        print(timeit(CurrentScanner, n))
-        print(timeit(NewScanner, n))
+        n = 50
+        print(timeit(CurrentParser, n))
+        print(timeit(Parser, n))
     else:
         n = 100
-        print(timeit(NewScanner, n))
+        print(timeit(Parser, n))
 
 
 if __name__ == "__main__":
@@ -360,7 +537,7 @@ if __name__ == "__main__":
     else:
         try:
             cProfile.run("test(False)", PROFILE)
-            pstats.Stats(PROFILE).strip_dirs().sort_stats("tottime").print_stats(.15)
+            pstats.Stats(PROFILE).strip_dirs().sort_stats("tottime").print_stats(.3)
         finally:
             try:
                 os.unlink(PROFILE)
