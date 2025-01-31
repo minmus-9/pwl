@@ -155,81 +155,141 @@ class NewScanner:
     def __init__(self, callback):
         self.callback = callback
         self.token = ""
+        self.pos = 0
         self.state = self.S_SYM
-        self.stack = EL
+        self.stack = []
+        self.c_map = {
+            "\t": self.c_ws,
+            "\n": self.c_ws,
+            "\r": self.c_ws,
+            " ": self.c_ws,
+            ";": self.c_cmnt,
+            "'": self.c_tick,
+            "`": self.c_backtick,
+            ",": self.c_comma,
+            '"': self.c_quote,
+            "(": self.c_lpar,
+            "[": self.c_lbrack,
+            "]": self.c_rbrack,
+            ")": self.c_rpar,
+        }
+        self.s_map = {
+            self.S_BS: self.s_bs,
+            self.S_COMMA: self.s_comma,
+            self.S_CMNT: self.s_comment,
+            self.S_STR: self.s_str,
+            self.S_SYM: self.s_sym,
+        }
+
+    def c_backtick(self):
+        if self.token:
+            raise SyntaxError("backtick is not a delimiter")
+        self.push(self.T_SYM)
+        self.push(self.T_BACKTICK)
+
+    def c_comma(self):
+        if self.token:
+            raise SyntaxError("comma is not a delimiter")
+        self.state = self.S_COMMA
+
+    def c_cmnt(self):
+        self.state = self.S_CMNT
+
+    def c_lbrack(self):
+        self.stack.append(symbol("]"))
+        self.push(self.T_SYM)
+        self.push(self.T_LPAR)
+
+    def c_lpar(self):
+        self.stack.append(symbol(")"))
+        self.push(self.T_SYM)
+        self.push(self.T_LPAR)
+
+    def c_quote(self):
+        if self.token:
+            raise SyntaxError("quote is not a delimiter")
+        self.state = self.S_STR
+
+    def c_rbrack(self):
+        if not self.stack:
+            raise SyntaxError(f"too many {ch!r}")
+        c = self.stack.pop()
+        if not eq(c, symbol("]")):
+            raise SyntaxError(f"expected {c!r}, got {ch!r}")
+        self.push(self.T_SYM)
+        self.push(self.T_RPAR)
+
+    def c_rpar(self):
+        if not self.stack:
+            raise SyntaxError(f"too many {ch!r}")
+        c = self.stack.pop()
+        if not eq(c, symbol(")")):
+            raise SyntaxError(f"expected {c!r}, got {ch!r}")
+        self.push(self.T_SYM)
+        self.push(self.T_RPAR)
+
+    def c_tick(self):
+        if self.token:
+            raise SyntaxError("tick is not a delimiter")
+        self.push(self.T_SYM)
+        self.push(self.T_TICK)
+
+    def c_ws(self):
+        self.push(self.T_SYM)
+
+    def s_bs(self, ch):
+        c = self.ESC.get(ch)
+        if c is None:
+            raise SyntaxError("bad escape {ch!r}")
+        self.token += c
+        self.state = self.S_STR
+        return True
+
+    def s_comma(self, ch):
+        if ch == "@":
+            self.push(self.T_COMMA_AT)
+        else:
+            self.push(self.T_COMMA)
+            assert self.pos > 0
+            self.pos -= 1
+        self.state = self.S_SYM
+        return True
+
+    def s_comment(self, ch):
+        if ch in "\n\r":
+            self.state = self.S_SYM
+        return True
+
+    def s_str(self, ch):
+        if ch == '"':
+            self.state = self.S_SYM
+            self.push(self.T_STR)
+        elif ch == "\\":
+            self.state = self.S_BS
+        else:
+            self.token += ch
+        return True
+
+    def s_sym(self, ch):
+        return False
 
     def feed(self, text):
         ## pylint: disable=too-many-branches,too-many-statements
         if text is None:
-            if self.stack is not EL:
-                raise SyntaxError(f"eof in {car(self.stack)!r}")
+            if self.stack:
+                raise SyntaxError(f"eof in {self.stack[-1]!r}")
             self.push(self.T_SYM)
             self.push(self.T_EOF)
             return
-        pos, n = 0, len(text)
-        while pos < n:
-            ch = text[pos]
-            pos += 1
-            if self.state == self.S_CMNT:
-                if ch in "\n\r":
-                    self.state = self.S_SYM
-            elif self.state == self.S_STR:
-                if ch == '"':
-                    self.state = self.S_SYM
-                    self.push(self.T_STR)
-                elif ch == "\\":
-                    self.state = self.S_BS
-                else:
-                    self.token += ch
-            elif self.state == self.S_BS:
-                c = self.ESC.get(ch)
-                if c is None:
-                    raise SyntaxError("bad escape {ch!r}")
-                self.token += c
-                self.state = self.S_STR
-            elif self.state == self.S_COMMA:
-                if ch == "@":
-                    self.push(self.T_COMMA_AT)
-                else:
-                    self.push(self.T_COMMA)
-                    assert pos > 0
-                    pos -= 1
-                self.state = self.S_SYM
-            elif ch in " \n\t\r":
-                self.push(self.T_SYM)
-            elif ch == ";":
-                self.state = self.S_CMNT
-            elif ch == "'":
-                if self.token:
-                    raise SyntaxError("tick is not a delimiter")
-                self.push(self.T_SYM)
-                self.push(self.T_TICK)
-            elif ch == "`":
-                if self.token:
-                    raise SyntaxError("backtick is not a delimiter")
-                self.push(self.T_SYM)
-                self.push(self.T_BACKTICK)
-            elif ch == ",":
-                if self.token:
-                    raise SyntaxError("comma is not a delimiter")
-                self.state = self.S_COMMA
-            elif ch == '"':
-                if self.token:
-                    raise SyntaxError("quote is not a delimiter")
-                self.state = self.S_STR
-            elif ch in "([":
-                self.stack = cons(symbol(self.DELIM_LUT[ch]), self.stack)
-                self.push(self.T_SYM)
-                self.push(self.T_LPAR)
-            elif ch in ")]":
-                if self.stack is EL:
-                    raise SyntaxError(f"too many {ch!r}")
-                c = car(self.stack)
-                self.stack = cdr(self.stack)
-                if not eq(c, symbol(ch)):
-                    raise SyntaxError(f"expected {c!r}, got {ch!r}")
-                self.push(self.T_SYM)
-                self.push(self.T_RPAR)
+        self.pos, n = 0, len(text)
+        while self.pos < n:
+            ch = text[self.pos]
+            self.pos += 1
+            if self.s_map[self.state](ch):
+                continue
+            f = self.c_map.get(ch)
+            if f:
+                f()
             else:
                 self.token += ch
 
