@@ -271,7 +271,11 @@ class NewScanner:
         return True
 
     def s_sym(self, ch):
-        return False
+        f = self.c_map.get(ch)
+        if f:
+            f()
+        else:
+            self.token += ch
 
     def feed(self, text):
         ## pylint: disable=too-many-branches,too-many-statements
@@ -285,13 +289,7 @@ class NewScanner:
         while self.pos < n:
             ch = text[self.pos]
             self.pos += 1
-            if self.s_map[self.state](ch):
-                continue
-            f = self.c_map.get(ch)
-            if f:
-                f()
-            else:
-                self.token += ch
+            self.s_map[self.state](ch)
 
     def push(self, ttype):
         t, self.token = self.token, ""
