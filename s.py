@@ -149,6 +149,8 @@ class CurrentScanner:
 
 
 class NewScanner:
+    ##  pylint: disable=too-many-instance-attributes
+
     T_SYM = "sym"
     T_INT = "int"
     T_REAL = "real"
@@ -187,6 +189,7 @@ class NewScanner:
             "]": self.c_rbrack,
             ")": self.c_rpar,
         }
+        self.lookup = self.c_map.get
         self.s_map = {
             self.S_BS: self.s_bs,
             self.S_COMMA: self.s_comma,
@@ -226,7 +229,7 @@ class NewScanner:
 
     def c_rbrack(self):
         if not self.stack:
-            raise SyntaxError(f"too many {ch!r}")
+            raise SyntaxError("too many ']'")
         c, self.stack = self.stack[-1], self.stack[:-1]
         if c != "]":
             raise SyntaxError(f"expected {c!r}, got ']'")
@@ -235,7 +238,7 @@ class NewScanner:
 
     def c_rpar(self):
         if not self.stack:
-            raise SyntaxError(f"too many {ch!r}")
+            raise SyntaxError("too many ')'")
         c, self.stack = self.stack[-1], self.stack[:-1]
         if c != ")":
             raise SyntaxError(f"expected {c!r}, got ')'")
@@ -257,7 +260,6 @@ class NewScanner:
             raise SyntaxError("bad escape {ch!r}")
         self.add(c)
         self.state = self.S_STR
-        return True
 
     def s_comma(self, ch):
         if ch == "@":
@@ -267,12 +269,10 @@ class NewScanner:
             assert self.pos > 0
             self.pos -= 1
         self.state = self.S_SYM
-        return True
 
     def s_comment(self, ch):
         if ch in "\n\r":
             self.state = self.S_SYM
-        return True
 
     def s_str(self, ch):
         if ch == '"':
@@ -282,26 +282,27 @@ class NewScanner:
             self.state = self.S_BS
         else:
             self.add(ch)
-        return True
 
     def s_sym(self, ch):
         if ch in " \n\r\t":
             self.push(self.T_SYM)
         else:
-            f = self.c_map.get(ch)
+            f = self.lookup(ch)
             if f:
                 f()
             else:
                 self.add(ch)
 
+    def eof(self):
+        if self.stack:
+            raise SyntaxError(f"eof in {self.stack[-1]!r}")
+        self.push(self.T_SYM)
+        self.push(self.T_EOF)
+
     def feed(self, text):
         ## pylint: disable=too-many-branches,too-many-statements
         if text is None:
-            if self.stack:
-                raise SyntaxError(f"eof in {self.stack[-1]!r}")
-            self.push(self.T_SYM)
-            self.push(self.T_EOF)
-            return
+            return self.eof()
         self.pos, n = 0, len(text)
         while self.pos < n:
             ch = text[self.pos]
@@ -355,7 +356,7 @@ def test(flag):
 
 
 if __name__ == "__main__":
-    if 0:
+    if 1:
         test(True)
     else:
         try:
