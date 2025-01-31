@@ -171,7 +171,8 @@ class NewScanner:
 
     def __init__(self, callback):
         self.callback = callback
-        self.token = ""
+        self.token = []
+        self.add = self.token.append
         self.pos = 0
         self.state = self.S_SYM
         self.stack = ""
@@ -254,7 +255,7 @@ class NewScanner:
         c = self.ESC.get(ch)
         if c is None:
             raise SyntaxError("bad escape {ch!r}")
-        self.token += c
+        self.add(c)
         self.state = self.S_STR
         return True
 
@@ -280,7 +281,7 @@ class NewScanner:
         elif ch == "\\":
             self.state = self.S_BS
         else:
-            self.token += ch
+            self.add(ch)
         return True
 
     def s_sym(self, ch):
@@ -291,7 +292,7 @@ class NewScanner:
             if f:
                 f()
             else:
-                self.token += ch
+                self.add(ch)
 
     def feed(self, text):
         ## pylint: disable=too-many-branches,too-many-statements
@@ -308,7 +309,7 @@ class NewScanner:
             self.s_map[self.state](ch)
 
     def push(self, ttype):
-        t, self.token = self.token, ""
+        t, self.token = "".join(self.token), []
         if ttype == self.T_SYM:
             if not t:
                 return
@@ -354,7 +355,7 @@ def test(flag):
 
 
 if __name__ == "__main__":
-    if 1:
+    if 0:
         test(True)
     else:
         try:
