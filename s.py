@@ -169,19 +169,13 @@ class NewScanner:
 
     ESC = {"t": "\t", "n": "\n", "r": "\r", '"': '"', "\\": "\\"}
 
-    DELIM_LUT = {"(": ")", "[": "]"}
-
     def __init__(self, callback):
         self.callback = callback
         self.token = ""
         self.pos = 0
         self.state = self.S_SYM
-        self.stack = []
+        self.stack = ""
         self.c_map = {
-            "\t": self.c_ws,
-            "\n": self.c_ws,
-            "\r": self.c_ws,
-            " ": self.c_ws,
             ";": self.c_cmnt,
             "'": self.c_tick,
             "`": self.c_backtick,
@@ -215,12 +209,12 @@ class NewScanner:
         self.state = self.S_CMNT
 
     def c_lbrack(self):
-        self.stack.append(symbol("]"))
+        self.stack += "]"
         self.push(self.T_SYM)
         self.push(self.T_LPAR)
 
     def c_lpar(self):
-        self.stack.append(symbol(")"))
+        self.stack += ")"
         self.push(self.T_SYM)
         self.push(self.T_LPAR)
 
@@ -232,18 +226,18 @@ class NewScanner:
     def c_rbrack(self):
         if not self.stack:
             raise SyntaxError(f"too many {ch!r}")
-        c = self.stack.pop()
-        if not eq(c, symbol("]")):
-            raise SyntaxError(f"expected {c!r}, got {ch!r}")
+        c, self.stack = self.stack[-1], self.stack[:-1]
+        if c != "]":
+            raise SyntaxError(f"expected {c!r}, got ']'")
         self.push(self.T_SYM)
         self.push(self.T_RPAR)
 
     def c_rpar(self):
         if not self.stack:
             raise SyntaxError(f"too many {ch!r}")
-        c = self.stack.pop()
-        if not eq(c, symbol(")")):
-            raise SyntaxError(f"expected {c!r}, got {ch!r}")
+        c, self.stack = self.stack[-1], self.stack[:-1]
+        if c != ")":
+            raise SyntaxError(f"expected {c!r}, got ')'")
         self.push(self.T_SYM)
         self.push(self.T_RPAR)
 
@@ -290,11 +284,14 @@ class NewScanner:
         return True
 
     def s_sym(self, ch):
-        f = self.c_map.get(ch)
-        if f:
-            f()
+        if ch in " \n\r\t":
+            self.push(self.T_SYM)
         else:
-            self.token += ch
+            f = self.c_map.get(ch)
+            if f:
+                f()
+            else:
+                self.token += ch
 
     def feed(self, text):
         ## pylint: disable=too-many-branches,too-many-statements
@@ -346,8 +343,8 @@ def timeit(klass, n):
     return n, dt, 1e6 * dt / n, n / dt
 
 
-def test():
-    if 0:
+def test(flag):
+    if flag:
         n = 40
         print(timeit(CurrentScanner, n))
         print(timeit(NewScanner, n))
@@ -357,11 +354,16 @@ def test():
 
 
 if __name__ == "__main__":
-    cProfile.run("""
-test()
-    """, PROFILE)
-
-    pstats.Stats(PROFILE).strip_dirs().sort_stats("tottime").print_stats(.15)
-
+    if 1:
+        test(True)
+    else:
+        try:
+            cProfile.run("test(False)", PROFILE)
+            pstats.Stats(PROFILE).strip_dirs().sort_stats("tottime").print_stats(.15)
+        finally:
+            try:
+                os.unlink(PROFILE)
+            except os.error:
+                pass
 
 ## EOF
