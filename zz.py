@@ -781,11 +781,13 @@ def unpack(args, n):
 ## }}}
 ## {{{ special forms
 
+
 def op_define_cont(value):
     frame = stack.pop()
     sym = frame.x
     frame.e.set(sym, value)
     return bounce(frame.c, EL)
+
 
 @spcl("define")
 def op_define(frame):
@@ -827,20 +829,21 @@ def op_lambda(frame):
 
     return bounce(frame.c, Lambda(params, body, frame.e))
 
+
 ## this follows https://blog.veitheller.de/Lets_Build_a_Quasiquoter.html
 ## (special) doesn't quite get the job done due to the way its env works.
 ## it ain't the same as a recursive scheme macro :-) this quasiquote impl
 ## is longer than the rest of the special forms combined (!), but it
 ## helps the bootstrap a lot.
 
+
 def qq_list_setup(frame, form):
     elt, form = car(form), cdr(form)
     if not (isinstance(form, Pair) or form is EL):
         raise TypeError(f"expected list, got {form!r}")
     stack.push(frame, x=form)
-    return bounce(
-        qq_list_next, Frame(frame, x=elt, c=qq_list_cont)
-    )
+    return bounce(qq_list_next, Frame(frame, x=elt, c=qq_list_cont))
+
 
 def qq_finish(frame, value):
     res = EL if value is SENTINEL else cons(value, EL)
@@ -850,6 +853,7 @@ def qq_finish(frame, value):
             break
         res = cons(f.x, res)
     return bounce(frame.c, res)
+
 
 def qq_list_cont(value):
     frame = stack.pop()
@@ -861,6 +865,7 @@ def qq_list_cont(value):
     stack.push(frame, x=value)
 
     return qq_list_setup(frame, form)
+
 
 def qq_spliced(value):
     frame = stack.pop()
@@ -882,6 +887,7 @@ def qq_spliced(value):
 
     raise RuntimeError("logs in the bedpan")
 
+
 def qq_list_next(frame):
     elt = frame.x
 
@@ -889,6 +895,7 @@ def qq_list_next(frame):
         _, x = unpack(elt, 2)
         return bounce(leval_, Frame(frame, x=x, c=qq_spliced))
     return bounce(qq, Frame(frame, x=elt, c=qq_list_cont))
+
 
 def qq_list(self, frame):
     form = frame.x
@@ -910,25 +917,31 @@ def qq_list(self, frame):
 
     return qq_list_setup(frame, form)
 
+
 def qq(frame):
     form = frame.x
     if isinstance(form, Pair):
         return bounce(qq_list, frame)
     return bounce(frame.c, form)
 
+
 @spcl("quasiquote")
 def op_quasiquote(frame):
     (form,) = unpack(frame.x, 1)
     return bounce(qq, Frame(frame, x=form))
 
+
 ###
+
 
 @spcl("quote")
 def op_quote(frame):
     (x,) = unpack(frame.x, 1)
     return bounce(frame.c, x)
 
+
 ###
+
 
 def op_setbang_cont(defn):
     frame = stack.pop()
@@ -936,17 +949,18 @@ def op_setbang_cont(defn):
     frame.e.setbang(sym, defn)
     return bounce(frame.c, EL)
 
+
 @spcl("set!")
 def op_setbang(frame):
     sym, defn = unpack(frame.x, 2)
     if not isinstance(sym, Symbol):
         raise TypeError(f"expected symbol, got {sym!r}")
     stack.push(frame, x=sym)
-    return bounce(
-        leval_, Frame(frame, x=defn, c=op_setbang_cont)
-    )
+    return bounce(leval_, Frame(frame, x=defn, c=op_setbang_cont))
+
 
 ###
+
 
 def op_special_cont(value):
     frame = stack.pop()
@@ -957,6 +971,7 @@ def op_special_cont(value):
     frame.e.set(sym, value)
     return bounce(frame.c, EL)
 
+
 @spcl("special")
 def op_special(frame):
     sym, defn = unpack(frame.x, 2)
@@ -965,11 +980,11 @@ def op_special(frame):
         raise TypeError(f"expected symbol, got {sym!r}")
 
     stack.push(frame, x=sym)
-    return bounce(
-        leval_, Frame(frame, x=defn, c=op_special_cont)
-    )
+    return bounce(leval_, Frame(frame, x=defn, c=op_special_cont))
+
 
 ###
+
 
 @spcl("trap")
 def op_trap(frame):
@@ -987,312 +1002,320 @@ def op_trap(frame):
         res = f"{t.__name__}: {str(v)}"
     return bounce(frame.c, cons(ok, cons(res, EL)))
 
+
 ## }}}
+## {{{ other primitives
 
 
-## {{{ XXX
-    ## {{{ operators
+def unary(frame, func):
+    (x,) = unpack(frame.x, 1)
+    return bounce(frame.c, func(x))
 
-    def unary(self, g, frame, func):
-        ## pylint: disable=no-self-use
-        (x,) = g.unpack(frame.x, 1)
-        return bounce(frame.c, g, func(x))
-
-    def binary(self, g, frame, func):
-        ## pylint: disable=no-self-use
-        x, y = g.unpack(frame.x, 2)
-        return bounce(frame.c, g, func(x, y))
-
-    @glbl(">string")
-    def op_to_string(self, g, frame):
-        ## pylint: disable=no-self-use
-        (x,) = g.unpack(frame.x, 1)
-        return bounce(g.stringify_, g, Frame(frame, x=x))
-
-    @glbl("atom?")
-    def op_atom(self, g, frame):
-        rpn = g.rpn
-
-        def f(x):
-            return rpn.T if rpn.is_atom(x) else rpn.EL
-
-        return self.unary(g, frame, f)
-
-    @glbl("call/cc")
-    @glbl("call-with-current-continuation")
-    def op_callcc(self, g, frame):
-        ## pylint: disable=no-self-use
-        (x,) = g.unpack(frame.x, 1)
-        if not callable(x):
-            raise TypeError(f"expected callable, got {x!r}")
-        cc = Continuation(g, frame.c)
-        arg = g.rpn.cons(cc, g.rpn.EL)
-        return bounce(x, g, Frame(frame, x=arg))
-
-    @glbl("car")
-    def op_car(self, g, frame):
-        return self.unary(g, frame, g.rpn.car)
-
-    @glbl("cdr")
-    def op_cdr(self, g, frame):
-        return self.unary(g, frame, g.rpn.cdr)
-
-    @glbl("cons")
-    def op_cons(self, g, frame):
-        return self.binary(g, frame, g.rpn.cons)
-
-    @glbl("div")
-    def op_div(self, g, frame):
-        rpn = g.rpn
-
-        def f(x, y):
-            ## XXX implicitly assuming integer == int!
-            if rpn.is_integer(x) and rpn.is_integer(y):
-                return x // y
-            return x / y
-
-        return self.binary(g, frame, f)
-
-    @glbl("eq?")
-    def op_eq(self, g, frame):
-        rpn = g.rpn
-
-        def f(x, y):
-            return rpn.T if rpn.eq(x, y) else rpn.EL
-
-        return self.binary(g, frame, f)
-
-    @glbl("equal?")
-    def op_equal(self, g, frame):
-        rpn = g.rpn
-
-        def f(x, y):
-            if not (rpn.is_number(x) and rpn.is_number(y)):
-                raise TypeError(f"expected numbers, got {x!r} {y!r}")
-
-            return rpn.T if x == y else rpn.EL
-
-        return self.binary(g, frame, f)
-
-    @glbl("error")
-    def op_error(self, g, frame):
-        ## pylint: disable=no-self-use
-        (x,) = g.unpack(frame.x, 1)
-        raise LispError(x)
-
-    @glbl("eval")
-    def op_eval(self, g, frame):
-        ## pylint: disable=no-self-use
-        rpn = g.rpn
 
-        try:
-            (x,) = g.unpack(frame.x, 1)
-            n_up = 0
-        except TypeError:
-            x, n_up = g.unpack(frame.x, 2)
-
-        if rpn.is_string(x):
-            l = []
-            p = Parser(g, l.append)
-            p.feed(rpn.string2str(x))
-            p.feed(None)
-            x = l[-1] if l else rpn.EL
-        e = frame.e
-        for _ in range(n_up):
-            if rpn.is_empty_list(e):
-                raise ValueError(f"cannot go up {n_up} levels")
-            e = e.parent()
-        return bounce(g.eval_, g, Frame(frame, x=x, e=e))
+def binary(frame, func):
+    x, y = unpack(frame.x, 2)
+    return bounce(frame.c, func(x, y))
 
-    ###
 
-    def op_exit_cont(self, g, value):
-        ## pylint: disable=no-self-use
-        raise SystemExit(value)
+@glbl(">string")
+def op_to_string(frame):
+    (x,) = unpack(frame.x, 1)
+    return bounce(stringify_, Frame(frame, x=x))
 
-    @glbl("exit")
-    def op_exit(self, g, frame):
-        (x,) = g.unpack(frame.x, 1)
-        if g.rpn.is_integer(x):
-            raise SystemExit(x)
-        return bounce(g.stringify_, g, Frame(frame, x=x, c=self.op_exit_cont))
 
-    ###
+@glbl("atom?")
+def op_atom(frame):
 
-    @glbl("lt?")
-    def op_lt(self, g, frame):
-        rpn = g.rpn
+    def f(x):
+        return T if is_atom(x) else EL
 
-        def f(x, y):
-            if not (rpn.is_number(x) and rpn.is_number(y)):
-                raise TypeError(f"expected numbers, got {x!r} and {y!r}")
-            return rpn.T if x < y else rpn.EL
+    return unary(frame, f)
 
-        return self.binary(g, frame, f)
-
-    @glbl("mul")
-    def op_mul2(self, g, frame):
-        rpn = g.rpn
-
-        def f(x, y):
-            if not (rpn.is_number(x) and rpn.is_number(y)):
-                raise TypeError(f"expected numbers, got {x!r} and {y!r}")
-            return x * y  ## XXX implicit conversion from python to lisp
-
-        return self.binary(g, frame, f)
 
-    @glbl("nand")
-    def op_nand(self, g, frame):
-        rpn = g.rpn
-
-        def f(x, y):
-            if not (rpn.is_integer(x) and rpn.is_integer(y)):
-                raise TypeError(f"expected integers, got {x!r} and {y!r}")
-            return ~(x & y)  ## XXX implicit conversion
-
-        return self.binary(g, frame, f)
-
-    ###
-
-    def op_print_cont(self, g, value):
-        rpn = g.rpn
-        frame = g.stack.pop()
-        args = frame.x
-
-        if rpn.is_empty_list(args):
-            print(value)
-            return bounce(frame.c, g, rpn.EL)
-        print(value, end=" ")
-
-        arg, args = rpn.car(args), rpn.cdr(args)
-
-        g.stack.push(frame, x=args)
-        return bounce(
-            g.stringify_, g, Frame(frame, x=arg, c=self.op_print_cont)
-        )
-
-    @glbl("print")
-    def op_print(self, g, frame):
-        rpn = g.rpn
-        args = frame.x
-
-        ## NB we know args is a well-formed list because eval() created it
-
-        if rpn.is_empty_list(args):
-            print()
-            return bounce(frame.c, g, rpn.EL)
-
-        arg, args = rpn.car(args), rpn.cdr(args)
-
-        g.stack.push(frame, x=args)
-        return bounce(
-            g.stringify_, g, Frame(frame, x=arg, c=self.op_print_cont)
-        )
-
-    ###
-
-    @glbl("set-car!")
-    def op_setcarbang(self, g, frame):
-        rpn = g.rpn
-
-        def f(x, y):
-            return rpn.set_car(x, y)
-
-        return self.binary(g, frame, f)
-
-    @glbl("set-cdr!")
-    def op_setcdrbang(self, g, frame):
-        rpn = g.rpn
-
-        def f(x, y):
-            return rpn.set_cdr(x, y)
-
-        return self.binary(g, frame, f)
-
-    @glbl("sub")
-    def op_sub(self, g, frame):
-        rpn = g.rpn
-
-        def f(x, y):
-            if not (rpn.is_number(x) and rpn.is_number(y)):
-                raise TypeError(f"expected numbers, got {x!r} and {y!r}")
-            return x - y  ## XXX implicit conversion from python to lisp
-
-        return self.binary(g, frame, f)
-
-    @glbl("type")
-    def op_type(self, g, frame):
-        def f(x):
-            t = g.type(x)
-            if t is not SENTINEL:
-                return t
-            if is_lambda(x):
-                return g.symbol("lambda")
-            if is_continuation(x):
-                return g.symbol("continuation")
-            if callable(x):
-                return g.symbol("primitive")
-            return g.symbol("opaque")
-
-        return self.unary(g, frame, f)
-
-    ## }}}
-    ## {{{ ffi
-
-    def module_ffi(self, g, args, module):
-        ## pylint: disable=no-self-use
-        if not args:
-            raise TypeError("at least one arg required")
-        sym = args.pop(0)
-        if not g.rpn.is_symbol(sym):
-            raise TypeError(f"expected symbol, got {sym!r}")
-        func = getattr(module, g.rpn.sym2str(sym), None)
-        if func is None:
-            raise ValueError(f"function {sym!r} does not exist")
-        return func(*args)
-
-    @ffi("math")
-    def op_ffi_math(self, g, args):
-        import math  ## pylint: disable=import-outside-toplevel
-
-        return self.module_ffi(g, args, math)
-
-    @ffi("random")
-    def op_ffi_random(self, g, args):
-        import random  ## pylint: disable=import-outside-toplevel
-
-        return self.module_ffi(g, args, random)
-
-    @ffi("range")
-    def op_ffi_range(self, _, args):
-        ## pylint: disable=no-self-use
-        return list(range(*args))
-
-    @ffi("shuffle")
-    def op_ffi_shuffle(self, _, args):
-        ## pylint: disable=no-self-use
-        import random  ## pylint: disable=import-outside-toplevel
-
-        (l,) = args
-        random.shuffle(l)
-        return l
-
-    @ffi("time")
-    def op_ffi_time(self, g, args):
-        import time  ## pylint: disable=import-outside-toplevel
-
-        def f(args):
-            ret = []
-            for arg in args:
-                if isinstance(arg, list):
-                    arg = tuple(arg)
-                ret.append(arg)
-            return ret
-
-        return self.module_ffi(g, f(args), time)
-
-    ## }}}
+@glbl("call/cc")
+@glbl("call-with-current-continuation")
+def op_callcc(frame):
+    (x,) = unpack(frame.x, 1)
+    if not callable(x):
+        raise TypeError(f"expected callable, got {x!r}")
+    cc = Continuation(frame.c)
+    arg = cons(cc, EL)
+    return bounce(x, Frame(frame, x=arg))
 
+
+@glbl("car")
+def op_car(frame):
+    return unary(frame, car)
+
+
+@glbl("cdr")
+def op_cdr(frame):
+    return unary(frame, cdr)
+
+
+@glbl("cons")
+def op_cons(frame):
+    return binary(frame, cons)
+
+
+@glbl("div")
+def op_div(frame):
+
+    def f(x, y):
+        if isinstance(x, int) and isinstance(y, int):
+            return x // y
+        return x / y
+
+    return binary(frame, f)
+
+
+@glbl("eq?")
+def op_eq(frame):
+
+    def f(x, y):
+        return T if eq(x, y) else EL
+
+    return binary(frame, f)
+
+
+@glbl("equal?")
+def op_equal(frame):
+
+    def f(x, y):
+        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+            raise TypeError(f"expected numbers, got {x!r} {y!r}")
+
+        return T if x == y else EL
+
+    return binary(frame, f)
+
+
+@glbl("error")
+def op_error(frame):
+    (x,) = unpack(frame.x, 1)
+    raise LispError(x)
+
+
+@glbl("eval")
+def op_eval(frame):
+
+    try:
+        (x,) = unpack(frame.x, 1)
+        n_up = 0
+    except TypeError:
+        x, n_up = unpack(frame.x, 2)
+
+    if isinstance(x, str):
+        l = []
+        p = Parser(l.append)
+        p.feed(x)
+        p.feed(None)
+        x = l[-1] if l else EL
+    e = frame.e
+    for _ in range(n_up):
+        if e is SENTINEL:
+            raise ValueError(f"cannot go up {n_up} levels")
+        e = e.p
+    return bounce(leval_, Frame(frame, x=x, e=e))
+
+
+###
+
+
+def op_exit_cont(value):
+    raise SystemExit(value)
+
+
+@glbl("exit")
+def op_exit(frame):
+    (x,) = unpack(frame.x, 1)
+    if isinstance(x, int):
+        raise SystemExit(x)
+    return bounce(stringify_, Frame(frame, x=x, c=op_exit_cont))
+
+
+###
+
+
+@glbl("lt?")
+def op_lt(frame):
+
+    def f(x, y):
+        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+            raise TypeError(f"expected numbers, got {x!r} and {y!r}")
+        return T if x < y else EL
+
+    return binary(frame, f)
+
+
+@glbl("mul")
+def op_mul2(frame):
+
+    def f(x, y):
+        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+            raise TypeError(f"expected numbers, got {x!r} and {y!r}")
+        return x * y
+
+    return binary(frame, f)
+
+
+@glbl("nand")
+def op_nand(frame):
+
+    def f(x, y):
+        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+            raise TypeError(f"expected integers, got {x!r} and {y!r}")
+        return ~(x & y)
+
+    return binary(frame, f)
+
+
+###
+
+
+def op_print_cont(value):
+    frame = stack.pop()
+    args = frame.x
+
+    if args is EL:
+        print(value)
+        return bounce(frame.c, EL)
+    print(value, end=" ")
+
+    arg, args = car(args), cdr(args)
+
+    stack.push(frame, x=args)
+    return bounce(stringify_, Frame(frame, x=arg, c=op_print_cont))
+
+
+@glbl("print")
+def op_print(frame):
+    args = frame.x
+
+    ## NB we know args is a well-formed list because eval() created it
+
+    if args is EL:
+        print()
+        return bounce(frame.c, EL)
+
+    arg, args = car(args), cdr(args)
+
+    stack.push(frame, x=args)
+    return bounce(stringify_, Frame(frame, x=arg, c=op_print_cont))
+
+
+###
+
+
+@glbl("set-car!")
+def op_setcarbang(frame):
+
+    def f(x, y):
+        return set_car(x, y)
+
+    return binary(frame, f)
+
+
+@glbl("set-cdr!")
+def op_setcdrbang(frame):
+
+    def f(x, y):
+        return set_cdr(x, y)
+
+    return binary(frame, f)
+
+
+@glbl("sub")
+def op_sub(frame):
+
+    def f(x, y):
+        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+            raise TypeError(f"expected numbers, got {x!r} and {y!r}")
+        return x - y
+
+    return binary(frame, f)
+
+
+@glbl("type")
+def op_type(frame):
+
+    def f(x):
+        ## pylint: disable=too-many-return-statements
+        if x is EL:
+            return symbol("()")
+        if x is T:
+            return symbol("#t")
+        if isinstance(x, Pair):
+            return symbol("pair")
+        if isinstance(x, Symbol):
+            return symbol("symbol")
+        if isinstance(x, int):
+            return symbol("integer")
+        if isinstance(x, float):
+            return symbol("float")
+        if isinstance(x, str):
+            return symbol("string")
+        if isinstance(x, Lambda):
+            return symbol("lambda")
+        if isinstance(x, Continuation):
+            return symbol("continuation")
+        if callable(x):
+            return symbol("primitive")
+        return symbol("opaque")
+
+    return unary(frame, f)
+
+## }}}
+## {{{ ffi
+
+def module_ffi(args, module):
+    if not args:
+        raise TypeError("at least one arg required")
+    sym = args.pop(0)
+    if not isinstance(sym, Symbol):
+        raise TypeError(f"expected symbol, got {sym!r}")
+    func = getattr(module, str(sym), SENTINEL)
+    if func is SENTINEL:
+        raise ValueError(f"function {sym!r} does not exist")
+    return func(*args)
+
+@ffi("math")
+def op_ffi_math(args):
+    import math  ## pylint: disable=import-outside-toplevel
+
+    return module_ffi(args, math)
+
+@ffi("random")
+def op_ffi_random(args):
+    import random  ## pylint: disable=import-outside-toplevel
+
+    return module_ffi(args, random)
+
+@ffi("range")
+def op_ffi_range(args):
+    return list(range(*args))
+
+@ffi("shuffle")
+def op_ffi_shuffle(args):
+    import random  ## pylint: disable=import-outside-toplevel
+
+    (l,) = args
+    random.shuffle(l)
+    return l
+
+@ffi("time")
+def op_ffi_time(args):
+    import time  ## pylint: disable=import-outside-toplevel
+
+    def f(args):
+        ret = []
+        for arg in args:
+            if isinstance(arg, list):
+                arg = tuple(arg)
+            ret.append(arg)
+        return ret
+
+    return module_ffi(f(args), time)
 
 ## }}}
 
