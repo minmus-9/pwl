@@ -39,7 +39,7 @@
 ;; }}}
 ;; {{{ last
 
-(define last (lambda (l)
+(define xlast (lambda (l)
     (if
         (null? l)
         ()
@@ -60,9 +60,20 @@
     )
 ))
 
+(print 'OK)
+(print (xlast ()))
+(print (xlast (list 1 2 3)))
+
 ;; }}}
 ;; {{{ begin/do
 
+(define last (lambda (l)
+    (if
+        (null? (cdr l))
+        (car l)
+        (last (cdr l))
+    )
+))
 (define do (lambda (& args) (last args)))
 (define begin do)
 

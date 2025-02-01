@@ -772,7 +772,7 @@ def stringify_(frame):
     ## pylint: disable=too-many-return-statements,too-many-locals
     x = frame.x
     if x is EL or x is T:
-        return repr(x)
+        return bounce(frame.c, repr(x))
     if isinstance(x, (Symbol, int, float)):
         return bounce(frame.c, str(x))
     if isinstance(x, str):
