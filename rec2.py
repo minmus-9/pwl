@@ -17,7 +17,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"z.py - recursive lisp"
+"rec2.py - a beefed up rec.py-style recursive lisp"
 
 ## {{{ prologue
 
@@ -1122,6 +1122,11 @@ def op_type(args, _):
 
 @glbl("while")
 def op_while(args, e):
+    """
+    yes, this is an abomination. but it really does help
+    keep from blowing out the python stack. at the
+    expense of making certain algorithms ugly, to be sure.
+    """
     (x,) = unpack(args, 1)
     if not callable(x):
         raise TypeError(f"expected callable, got {x!r}")
