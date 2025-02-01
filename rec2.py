@@ -65,8 +65,11 @@ __all__ = (
     "main",
 )
 
-
 ## }}}
+
+## needed for bench.lisp, not sure how high it *actually* needs to be
+#sys.setrecursionlimit(50000)
+
 ## {{{ basics
 
 

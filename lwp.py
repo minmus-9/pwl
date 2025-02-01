@@ -292,8 +292,8 @@ class Stack:
         def top(self):
             return self.rpn.car(self.stack)
 
-    def push(self, x):
-        self.stack = self.rpn.cons(x, self.stack)
+    def push(self, __x__):
+        self.stack = self.rpn.cons(__x__, self.stack)
 
 
 ## }}}
@@ -316,8 +316,8 @@ class Frame:
 
 
 class FrameStack(Stack):
-    def push(self, x, **kw):
-        super().push(Frame(x, **kw))
+    def push(self, __x__, **kw):
+        super().push(Frame(__x__, **kw))
 
 
 ## }}}

@@ -119,6 +119,8 @@ GPL license header):
 |oo.py    |OO version of lisp.py                                   |1550|1150|4.449|
 |pylisp.py|Add an FFI-based runtime to oo.py using its API         | 250| 200|4.676|
 |pwl.py   |Inline all the stdlibs, call pylisp.py                  |1100| 800|4.722|
+|lwp.py   |From scratch redo of pylisp.py                          |2150|1700|45.22| <= wow
+|rec2.py  |Add lwp.py features into rec.py, basically              |1300|1000|12.40|
 
 The silly benchmark lives in the file `bench.lisp`.
 
