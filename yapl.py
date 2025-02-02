@@ -158,13 +158,6 @@ class Stack:
     def clear(self):
         self.s = EL
 
-    def dump_if_nonempty(self):
-        if self.s is not EL:
-            import pprint  ## pylint: disable=import-outside-toplevel
-
-            print("STACK:")
-            pprint.pprint(self.s)
-
     def push(self, thing):
         self.s = cons(thing, self.s)
 
@@ -666,19 +659,16 @@ def main(force_repl=False):
             print(stringify(value))
 
     stop = True
-    try:
-        for filename in sys.argv[1:]:
-            if filename == "+":
-                continue  ## ignore for compatibility
-            if filename == "-":
-                stop = False
-                break
-            load(filename, callback=callback)
-            stop = True
-        if force_repl or not stop:
-            raise SystemExit(repl(callback))
-    finally:
-        stack.dump_if_nonempty()
+    for filename in sys.argv[1:]:
+        if filename == "+":
+            continue  ## ignore for compatibility
+        if filename == "-":
+            stop = False
+            break
+        load(filename, callback=callback)
+        stop = True
+    if force_repl or not stop:
+        raise SystemExit(repl(callback))
 
 
 ## }}}
@@ -880,7 +870,6 @@ def leval_(frame):
             return bounce(op, Frame(frame, x=args))
     elif callable(sym):
         ## primitive Lambda Continuation
-        stack.push(frame, proc=sym, x=args)
         return bounce(eval_proc_done, sym)
     elif not isinstance(sym, Pair):
         raise TypeError(f"expected proc or list, got {sym!r}")
