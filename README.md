@@ -121,7 +121,7 @@ GPL license header):
 |pwl.py   |Inline all the stdlibs, call pylisp.py                  |1100| 800|4.722|
 |lwp.py   |From scratch redo of pylisp.py                          |2150|1700|45.22| <= wow
 |rec2.py  |Add lwp.py features into rec.py, basically              |1300|1000|12.40|
-|yapl.py  |Yup, another one. Like lwp.py but faster                |1650|
+|yapl.py  |Yup, another one. Like lwp.py but faster                |1650|1200|27.47|
 
 The silly benchmark lives in the file `bench.lisp`.
 
