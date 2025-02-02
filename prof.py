@@ -43,11 +43,11 @@ PROFILE = "/dev/shm/profile"
 if 1:
     cProfile.run("""
 from lwp import main
-from z import main
+from zz import main
 import sys
 sys.argv[1:] = ["lwp.lisp", "sicp.lisp", "t.lisp"]
 sys.argv[1:] = ["lwp.lisp", "sicp.lisp"]
-sys.argv[1:] = ["z.lisp", "sicp.lisp"]
+#sys.argv[1:] = ["z.lisp", "sicp.lisp"]
 main()
     """, PROFILE)
 

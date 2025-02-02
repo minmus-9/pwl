@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"zz.py -- next gen :-)"
+"yapl.py -- next gen :-)"
 
 ## pylint: disable=invalid-name,too-many-lines,unbalanced-tuple-unpacking
 ## XXX pylint: disable=missing-docstring
@@ -109,8 +109,7 @@ class Pair(list):
     ## pylint: disable=too-few-public-methods
 
     def __init__(self, x, y):
-        super().__init__()
-        self[:] = (x, y)
+        super().__init__((x, y))
 
 
 def cons(x, y):
@@ -151,26 +150,29 @@ def set_cdr(x, y):
 
 class Stack:
     def __init__(self):
-        self.s = []
+        self.s = EL
 
     def __bool__(self):
-        return bool(self.s)
+        return self.s is EL
 
     def clear(self):
-        self.s.clear()
+        self.s = EL
+
+    def dump_if_nonempty(self):
+        if self.s is not EL:
+            import pprint  ## pylint: disable=import-outside-toplevel
+
+            print("STACK:")
+            pprint.pprint(self.s)
 
     def push(self, thing):
-        self.s.append(thing)
+        self.s = cons(thing, self.s)
 
     def pop(self):
-        if not self.s:
+        if self.s is EL:
             raise ValueError("stack is empty")
-        return self.s.pop()
-
-    def top(self):
-        if not self.s:
-            raise ValueError("stack is empty")
-        return self.s[-1]
+        ret, self.s = car(self.s), cdr(self.s)
+        return ret
 
     ## for continuations
 
@@ -189,10 +191,12 @@ class Frame:
     ## pylint: disable=too-few-public-methods
 
     def __init__(self, f, **kw):
-        assert isinstance(f, Frame) or f is SENTINEL
         if f is not SENTINEL:
             self.__dict__.update(f.__dict__)
         self.__dict__.update(kw)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.__dict__!r})"
 
 
 ## }}}
@@ -245,7 +249,6 @@ class Queue:
 
 class Environment:
     def __init__(self, params, args, parent):
-        assert isinstance(parent, Environment) or parent is SENTINEL
         self.p = parent
         self.d = {}
         self.bind(params, args)
@@ -663,16 +666,19 @@ def main(force_repl=False):
             print(stringify(value))
 
     stop = True
-    for filename in sys.argv[1:]:
-        if filename == "+":
-            continue  ## ignore for compatibility
-        if filename == "-":
-            stop = False
-            break
-        load(filename, callback=callback)
-        stop = True
-    if force_repl or not stop:
-        raise SystemExit(repl(callback))
+    try:
+        for filename in sys.argv[1:]:
+            if filename == "+":
+                continue  ## ignore for compatibility
+            if filename == "-":
+                stop = False
+                break
+            load(filename, callback=callback)
+            stop = True
+        if force_repl or not stop:
+            raise SystemExit(repl(callback))
+    finally:
+        stack.dump_if_nonempty()
 
 
 ## }}}
@@ -875,7 +881,7 @@ def leval_(frame):
     elif callable(sym):
         ## primitive Lambda Continuation
         stack.push(frame, proc=sym, x=args)
-        return eval_proc_done(sym)
+        return bounce(eval_proc_done, sym)
     elif not isinstance(sym, Pair):
         raise TypeError(f"expected proc or list, got {sym!r}")
 
@@ -908,7 +914,8 @@ def lv2pv_setup(frame, args):
     arg, args = car(args), cdr(args)
     stack.push(frame, x=args)
     return bounce(
-        lisp_value_to_py_value_, Frame(frame, x=arg, c=lv2pv_next_arg))
+        lisp_value_to_py_value_, Frame(frame, x=arg, c=lv2pv_next_arg)
+    )
 
 
 def lv2pv_next_arg(value):
@@ -1110,11 +1117,77 @@ def op_lambda(frame):
     return bounce(frame.c, Lambda(params, body, frame.e))
 
 
-## this follows https://blog.veitheller.de/Lets_Build_a_Quasiquoter.html
-## (special) doesn't quite get the job done due to the way its env works.
-## it ain't the same as a recursive scheme macro :-) this quasiquote impl
-## is longer than the rest of the special forms combined (!), but it
-## helps the bootstrap a lot.
+@spcl("quote")
+def op_quote(frame):
+    (x,) = unpack(frame.x, 1)
+    return bounce(frame.c, x)
+
+
+###
+
+
+def op_setbang_cont(defn):
+    frame = stack.pop()
+    sym = frame.x
+    frame.e.setbang(sym, defn)
+    return bounce(frame.c, EL)
+
+
+@spcl("set!")
+def op_setbang(frame):
+    sym, defn = unpack(frame.x, 2)
+    if not isinstance(sym, Symbol):
+        raise TypeError(f"expected symbol, got {sym!r}")
+    stack.push(frame, x=sym)
+    return bounce(leval_, Frame(frame, x=defn, c=op_setbang_cont))
+
+
+###
+
+
+def op_special_cont(value):
+    frame = stack.pop()
+    sym = frame.x
+    if not isinstance(value, Lambda):
+        raise TypeError(f"expected lambda, got {value!r}")
+    value.special = True
+    frame.e.set(sym, value)
+    return bounce(frame.c, EL)
+
+
+@spcl("special")
+def op_special(frame):
+    sym, defn = unpack(frame.x, 2)
+
+    if not isinstance(sym, Symbol):
+        raise TypeError(f"expected symbol, got {sym!r}")
+
+    stack.push(frame, x=sym)
+    return bounce(leval_, Frame(frame, x=defn, c=op_special_cont))
+
+
+###
+
+
+@spcl("trap")
+def op_trap(frame):
+    (x,) = unpack(frame.x, 1)
+    ok = T
+    try:
+        ## this has to be recursive because you can't pass
+        ## exceptions across the trampoline. there is a chance
+        ## of blowing the python stack here if you do a deeply
+        ## recursive trap.
+        res = leval(x, frame.e)
+    except:  ## pylint: disable=bare-except
+        ok = EL
+        t, v = sys.exc_info()[:2]
+        res = f"{t.__name__}: {str(v)}"
+    return bounce(frame.c, cons(ok, cons(res, EL)))
+
+
+## }}}
+## {{{ quasiquote
 
 
 def qq_list_setup(frame, form):
@@ -1209,78 +1282,6 @@ def qq(frame):
 def op_quasiquote(frame):
     (form,) = unpack(frame.x, 1)
     return bounce(qq, Frame(frame, x=form))
-
-
-###
-
-
-@spcl("quote")
-def op_quote(frame):
-    (x,) = unpack(frame.x, 1)
-    return bounce(frame.c, x)
-
-
-###
-
-
-def op_setbang_cont(defn):
-    frame = stack.pop()
-    sym = frame.x
-    frame.e.setbang(sym, defn)
-    return bounce(frame.c, EL)
-
-
-@spcl("set!")
-def op_setbang(frame):
-    sym, defn = unpack(frame.x, 2)
-    if not isinstance(sym, Symbol):
-        raise TypeError(f"expected symbol, got {sym!r}")
-    stack.push(frame, x=sym)
-    return bounce(leval_, Frame(frame, x=defn, c=op_setbang_cont))
-
-
-###
-
-
-def op_special_cont(value):
-    frame = stack.pop()
-    sym = frame.x
-    if not isinstance(value, Lambda):
-        raise TypeError(f"expected lambda, got {value!r}")
-    value.special = True
-    frame.e.set(sym, value)
-    return bounce(frame.c, EL)
-
-
-@spcl("special")
-def op_special(frame):
-    sym, defn = unpack(frame.x, 2)
-
-    if not isinstance(sym, Symbol):
-        raise TypeError(f"expected symbol, got {sym!r}")
-
-    stack.push(frame, x=sym)
-    return bounce(leval_, Frame(frame, x=defn, c=op_special_cont))
-
-
-###
-
-
-@spcl("trap")
-def op_trap(frame):
-    (x,) = unpack(frame.x, 1)
-    ok = T
-    try:
-        ## this has to be recursive because you can't pass
-        ## exceptions across the trampoline. there is a chance
-        ## of blowing the python stack here if you do a deeply
-        ## recursive trap.
-        res = leval(x, frame.e)
-    except:  ## pylint: disable=bare-except
-        ok = EL
-        t, v = sys.exc_info()[:2]
-        res = f"{t.__name__}: {str(v)}"
-    return bounce(frame.c, cons(ok, cons(res, EL)))
 
 
 ## }}}
