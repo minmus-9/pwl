@@ -183,10 +183,10 @@ class Stack:
 class Frame:
     ## pylint: disable=too-few-public-methods
 
-    def __init__(self, f, **kw):
-        if f is not SENTINEL:
-            self.__dict__.update(f.__dict__)
-        self.__dict__.update(kw)
+    def __init__(self, f, x=None, c=None, e=None):
+        self.x = f.x if x is None else x
+        self.c = f.c if c is None else c
+        self.e = f.e if e is None else e
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.__dict__!r})"
@@ -814,13 +814,13 @@ def eval_next_arg(value):
         while True:
             f = stack.pop()
             if f.x is SENTINEL:
-                proc = f.proc
+                proc = f.c  ## NB abuse of .c field
                 break
             ret = cons(f.x, ret)
         ## at this point, need to see if proc is ffi
         if getattr(proc, "ffi", False):
             ## XXX construct args as a list not pair
-            return bounce(do_ffi, Frame(frame, x=ret, proc=proc))
+            return bounce(do_ffi, Frame(frame, x=cons(ret, proc)))
         return bounce(proc, Frame(frame, x=ret))
 
     stack.push(frame, x=value)
@@ -844,7 +844,7 @@ def eval_proc_done(proc):
 
     ## evaluate args...
 
-    stack.push(frame, proc=proc, x=SENTINEL)
+    stack.push(frame, c=proc, x=SENTINEL)  ## NB abuse .c field
 
     return eval_setup(frame, args)
 
@@ -870,6 +870,7 @@ def leval_(frame):
             return bounce(op, Frame(frame, x=args))
     elif callable(sym):
         ## primitive Lambda Continuation
+        stack.push(frame, x=args)
         return bounce(eval_proc_done, sym)
     elif not isinstance(sym, Pair):
         raise TypeError(f"expected proc or list, got {sym!r}")
@@ -883,8 +884,9 @@ def leval_(frame):
 
 
 def do_ffi(frame):
-    args = frame.x
-    func = frame.proc
+    af = frame.x
+    args = car(af)
+    func = cdr(af)
     stack.push(frame, x=func)
 
     if args is EL:
