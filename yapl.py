@@ -94,11 +94,11 @@ symbol = SymbolTable().symbol
 
 
 def is_atom(x):
-    return x is EL or isinstance(x, Symbol) or x is T
+    return isinstance(x, Symbol) or x is EL or x is T
 
 
 def eq(x, y):
-    return is_atom(x) and x is y
+    return x is y and is_atom(x)
 
 
 ## }}}
