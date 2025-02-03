@@ -18,9 +18,10 @@ T_FLOAT = 0x08
 T_STR = 0x09
 T_PRIMITIVE = 0x0A
 T_OPAQUE = 0x0B
+T_ROOT = 0x0C
 
 T_MIN = 0x01
-T_MAX = 0x0B
+T_MAX = 0x0C
 
 
 class Memory:
@@ -36,17 +37,22 @@ class Memory:
 
 
 class Heap_:
+    ## pylint: disable=too-many-instance-attributes
+
     ALIGN = 2
 
     BYTES_PER_CELL = 4
 
-    def __init__(self, n, trace_roots):
-        assert not (n & 1) and n >= 16
+    def __init__(self, n):
+        assert not n & 1
         self.size = n
-        self.trace_roots = trace_roots
         self.mem = Memory(n)
         self.hp = self.to_space = 0
         self.limit = self.from_space = self.hp + n // 2
+        self.n_collect = 0
+        self.boot()
+
+    ### gc
 
     def align(self, addr, size):
         ## pylint: disable=no-self-use
@@ -68,7 +74,7 @@ class Heap_:
 
     def copy(self, addr):
         obj = self.instantiate(addr)
-        size = obj.size()
+        size = obj.size(self)
         to = self.hp
         for i in range(size):
             self.mem[to + i] = self.mem[addr + i]
@@ -94,11 +100,15 @@ class Heap_:
     def collect(self):
         self.flip()
         scan = self.hp
-        self.trace_roots(self, self.visit_field)
+        self.n_collect += 1
+        self.trace_roots(self.visit_field)
         while scan < self.hp:
             obj = self.instantiate(scan)
+            size = obj.size(self)
             obj.visit(self.visit_field)
-            scan += self.align(obj.size(), self.ALIGN)
+            scan += self.align(size, self.ALIGN)
+
+    ### allocator
 
     def allocate(self, size):
         while True:
@@ -108,22 +118,23 @@ class Heap_:
                 self.collect()
                 if self.limit - self.hp < size:
                     raise MemoryError(f"cannot allocate {size}")
-            else:
-                break
+            break
         self.hp = new
         return addr
+
+    ### object mgt
 
     def objtype(self, addr):
         value = self.mem[addr]
         assert not value & FORWARDED
         value >>= 1
-        assert T_MIN <= value <= T_MAX
+        assert T_MIN <= value <= T_MAX, value
         return value
 
     def instantiate(self, addr):
         t = self.objtype(addr)
         c = CLASSES[t]
-        return c(addr)
+        return c(self, addr)
 
     def create(self, addr, otype):
         assert T_MIN <= otype <= T_MAX
@@ -136,6 +147,17 @@ class Heap_:
 
     def new(self, otype, *args, **kw):
         return CLASSES[otype].new(self, *args, **kw)
+
+    ###
+
+    def boot(self):
+        self.root_ = self.new(T_ROOT).addr()
+
+    def root(self):
+        return self.instantiate(self.root_)
+
+    def trace_roots(self, visitor):
+        self.root().visit(visitor)
 
 
 CLASSES = {}
@@ -150,13 +172,29 @@ def gc_class(obj_type):
 
 
 class Object:
-    def __init__(self, addr):
+    def __init__(self, heap, addr):
+        self.heap_ = heap
         self.addr_ = addr
+        self.nc_ = heap.n_collect
 
     def addr(self):
+        h = self.heap()
+        a = self.addr_
+        nc = h.n_collect
+        if nc != self.nc_:
+            assert nc == self.nc_ + 1
+            assert h.is_forwarded(a)
+            self.nc_, self.addr_ = nc, h.get_forwarded(a)
         return self.addr_
 
+    def heap(self):
+        return self.heap_
+
     ###
+
+    @classmethod
+    def new(heap, *args, **kw):
+        raise NotImplementedError()
 
     def size(self, heap):
         raise NotImplementedError()
@@ -169,6 +207,12 @@ class Object:
 class EL_(Object):
     @classmethod
     def new(cls, heap):
+        addr = heap.allocate(1)
+        obj = heap.create(addr, T_EL)
+        obj.initialize()
+        return obj
+
+    def initialize(self):
         pass
 
     def size(self, _):
@@ -177,6 +221,19 @@ class EL_(Object):
 
 @gc_class(T_T)
 class T_(Object):
+    def size(self, _):
+        return 1
+
+    @classmethod
+    def new(cls, heap):
+        addr = heap.allocate(1)
+        obj = heap.create(addr, T_T)
+        obj.initialize()
+        return obj
+
+    def initialize(self):
+        pass
+
     def size(self, _):
         return 1
 
@@ -204,7 +261,7 @@ class Symbol_(Object):
             addr += 1
 
     def size(self, heap):
-        addr = self.addr() + 1
+        addr = self.addr() + 1  ## 1 for header
         return heap.mem[addr]
 
 
@@ -219,8 +276,8 @@ class Pair_(Object):
 
     def initialize(self, heap, x, y):
         addr = self.addr() + 1  ## 1 for header
-        heap.mem[addr] = x
-        heap.mem[addr + 1] = y
+        heap.mem[addr] = 0 if x is None else x.addr()
+        heap.mem[addr + 1] = 0 if y is None else y.addr()
 
     def size(self, _):
         return 3
@@ -231,33 +288,47 @@ class Pair_(Object):
         visitor(addr + 1)
 
 
-@gc_class(T_LAMBDA)
-class Lambda_(Object):
+@gc_class(T_ROOT)
+class Root_(Object):
+    SIZE = 1 + 4
+
     @classmethod
-    def new(cls, heap, params, body, env):
-        addr = heap.allocate(4)
-        obj = heap.create(addr, T_LAMBDA)
-        obj.initialize(heap, params, body, env)
+    def new(cls, heap):
+        addr = heap.allocate(cls.SIZE)
+        obj = heap.create(addr, T_ROOT)
+        obj.initialize(heap)
         return obj
 
-    def size(self, _):
-        return 4
-
-    def initialize(self, heap, params, body, env):
+    def initialize(self, heap):
+        h = self.heap()
+        mem = h.mem
         addr = self.addr()
-        heap.mem[addr + 1] = params.addr()
-        heap.mem[addr + 2] = body.addr()
-        heap.mem[addr + 3] = env.addr()
+        h.mem[addr + 1] = h.new(T_EL).addr()  ## EL
+        h.mem[addr + 2] = h.new(T_T).addr()  ## T
+        h.mem[addr + 3] = h.new(T_EL).addr()  ## frame stack
+        assert not h.n_collect
+
+    def size(self, _):
+        return self.SIZE
 
     def visit(self, visitor):
-        addr = self.addr()
-        visitor(addr + 1)
-        visitor(addr + 2)
-        visitor(addr + 3)
+        a = self.addr()
+        for i in range(1, self.SIZE):
+            visitor(a + i)
+
+    def EL(self):
+        h = self.heap()
+        el_addr = h.mem[self.addr() + 1]
+        return h.instantiate(el_addr)
 
 
 def test():
-    pass
+    h = Heap_(64)
+    print(h.root().EL())
+    h.collect()
+    print(h.root_)
+    print(h.root().EL())
+    print(h.mem.store)
 
 
 if __name__ == "__main__":
