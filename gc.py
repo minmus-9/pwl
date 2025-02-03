@@ -5,6 +5,9 @@
 ## pylint: disable=invalid-name
 ## XXX pylint: disable=missing-docstring
 
+import locale
+import struct
+
 
 FORWARDED = 0x01
 T_EL = 0x01
@@ -29,27 +32,28 @@ class Memory:
         self.store = [0] * size
 
     def __getitem__(self, addr):
+        assert 0 <= addr < len(self.store)
         return self.store[addr]
 
     def __setitem__(self, addr, value):
-        assert -0x80000000 <= value <= 0xFFFFFFFF
-        self.store[addr] = value & 0xFFFFFFFF
+        assert 0 <= addr < len(self.store)
+        assert -0x80000000_00000000 <= value <= 0xFFFFFFFF_FFFFFFFF
+        self.store[addr] = value & 0xFFFFFFFF_FFFFFFFF
 
 
 class Heap_:
     ## pylint: disable=too-many-instance-attributes
 
-    ALIGN = 2
+    ALIGN = 2  ## save 1 flag bit for FORWARDED
 
     BYTES_PER_CELL = 4
 
     def __init__(self, n):
-        assert not n & 1
+        assert n & -self.ALIGN == n
         self.size = n
         self.mem = Memory(n)
         self.hp = self.to_space = 0
         self.limit = self.from_space = self.hp + n // 2
-        self.n_collect = 0
         self.boot()
 
     ### gc
@@ -99,9 +103,8 @@ class Heap_:
 
     def collect(self):
         self.flip()
-        scan = self.hp
-        self.n_collect += 1
         self.trace_roots(self.visit_field)
+        scan = self.hp
         while scan < self.hp:
             obj = self.instantiate(scan)
             size = obj.size(self)
@@ -157,6 +160,7 @@ class Heap_:
         return self.instantiate(self.root_)
 
     def trace_roots(self, visitor):
+        self.root_ = self.copy(self.root_)
         self.root().visit(visitor)
 
 
@@ -166,29 +170,78 @@ CLASSES = {}
 def gc_class(obj_type):
     def wrap(cls):
         CLASSES[obj_type] = cls
+        setattr(cls, "OBJ_TYPE", obj_type)
         return cls
 
     return wrap
 
 
+class Reference:
+    def __init__(self, start):
+        self.name = None
+        self.start = start
+
+    def __set_name__(self, _, name):
+        self.name = name
+
+    def __get__(self, obj, owner=None):
+        if obj is None:
+            return self
+        addr = obj.addr() + self.start
+        heap = obj.heap()
+        oa = heap.mem[addr]
+        return heap.instantiate(oa)
+
+    def __set__(self, obj, value):
+        addr = obj.addr() + self.start
+        obj.heap().mem[addr] = value.addr()
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.name}, {self.start})"
+
+
+class IntegerField:
+    def __init__(self, start):
+        self.name = None
+        self.start = start
+
+    def __set_name__(self, _, name):
+        self.name = name
+
+    def __get__(self, obj, owner=None):
+        if obj is None:
+            return self
+        addr = obj.addr() + self.start
+        return obj.heap().mem[addr]
+
+    def __set__(self, obj, value):
+        addr = obj.addr() + self.start
+        obj.heap().mem[addr] = value
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.name}, {self.start})"
+
+
 class Object:
+    HEADER = IntegerField(0)
+
     def __init__(self, heap, addr):
         self.heap_ = heap
         self.addr_ = addr
-        self.nc_ = heap.n_collect
 
     def addr(self):
         h = self.heap()
         a = self.addr_
-        nc = h.n_collect
-        if nc != self.nc_:
-            assert nc == self.nc_ + 1
-            assert h.is_forwarded(a)
-            self.nc_, self.addr_ = nc, h.get_forwarded(a)
+        self.addr_ = h.get_forwarded(a) if h.is_forwarded(a) else a
         return self.addr_
 
     def heap(self):
         return self.heap_
+
+    ###
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}@{self.addr()}"
 
     ###
 
@@ -204,7 +257,7 @@ class Object:
 
 
 @gc_class(T_EL)
-class EL_(Object):
+class EL(Object):
     @classmethod
     def new(cls, heap):
         addr = heap.allocate(1)
@@ -220,10 +273,7 @@ class EL_(Object):
 
 
 @gc_class(T_T)
-class T_(Object):
-    def size(self, _):
-        return 1
-
+class T(Object):
     @classmethod
     def new(cls, heap):
         addr = heap.allocate(1)
@@ -239,45 +289,65 @@ class T_(Object):
 
 
 @gc_class(T_SYMBOL)
-class Symbol_(Object):
+class Symbol(Object):
+    LENGTH = IntegerField(1)
+
     @classmethod
     def new(cls, heap, s):
         assert type(s) is str and s  ## pylint: disable=unidiomatic-typecheck
+        s = s.encode(locale.getpreferredencoding())
         n = len(s)
-        m = (n + heap.BYTES_PER_CELL) & -heap.BYTES_PER_CELL
-        cells = m // heap.BYTES_PER_CELL
+        cells = (n + heap.BYTES_PER_CELL - 1) // heap.BYTES_PER_CELL
         addr = heap.allocate(cells + 1 + 1)  ## 1 for header, 1 for length
         obj = heap.create(addr, T_SYMBOL)
-        obj.initialize(heap, s, n)
+        obj.initialize(s)
         return obj
 
-    def initialize(self, heap, s, n):
+    def initialize(self, s):
+        n = len(s)
+        heap = self.heap()
+        bpc = heap.BYTES_PER_CELL
+        pad = b"\x00" * (bpc - 1)
         addr = self.addr() + 1  ## 1 for header
+        self.LENGTH = n
         heap.mem[addr] = n
         addr += 1  ## 1 for length
         while s:
-            heap.mem[addr] = s[: heap.BYTES_PER_CELL]
-            s = s[heap.BYTES_PER_CELL :]
+            chunk, s = s[: bpc], s[bpc :]
+            heap.mem[addr] = struct.unpack(">I", (chunk + pad)[: bpc])[0]
             addr += 1
 
     def size(self, heap):
-        addr = self.addr() + 1  ## 1 for header
-        return heap.mem[addr]
+        return self.LENGTH + 1 + 1  ## 1 for header, 1 for length
+
+    def to_str(self):
+        a = self.addr() + 1 + 1  ## 1 for header, 1 for length
+        heap = self.heap()
+        n = self.LENGTH
+        cells = (n + heap.BYTES_PER_CELL - 1) // heap.BYTES_PER_CELL
+        parts = []
+        for i in range(cells):
+            parts.append(struct.pack(">I", heap.mem[a + i]))
+        b = b"".join(parts)
+        return b[:n].decode(locale.getpreferredencoding())
 
 
 @gc_class(T_PAIR)
-class Pair_(Object):
+class Pair(Object):
+    CAR = Reference(1)
+    CDR = Reference(2)
+
     @classmethod
     def new(cls, heap, x, y):
         addr = heap.allocate(1 + 2)  ## 1 for header, 2 for pointers
         obj = heap.create(addr, T_PAIR)
-        obj.initialize(heap, x, y)
+        obj.initialize(x, y)
         return obj
 
-    def initialize(self, heap, x, y):
-        addr = self.addr() + 1  ## 1 for header
-        heap.mem[addr] = 0 if x is None else x.addr()
-        heap.mem[addr + 1] = 0 if y is None else y.addr()
+    def initialize(self, x, y):
+        heap = self.heap()
+        self.CAR = x
+        self.CDR = y
 
     def size(self, _):
         return 3
@@ -288,25 +358,25 @@ class Pair_(Object):
         visitor(addr + 1)
 
 
-@gc_class(T_ROOT)
-class Root_(Object):
-    SIZE = 1 + 4
+@gc_class(T_LAMBDA)
+class Lambda(Object):
+    SIZE = 1 + 3  ## 1 for header, rests for fields
+
+    PARAMS = Reference(1)
+    BODY = Reference(2)
+    ENV = Reference(3)
 
     @classmethod
-    def new(cls, heap):
+    def new(cls, heap, params, body, env):
         addr = heap.allocate(cls.SIZE)
-        obj = heap.create(addr, T_ROOT)
-        obj.initialize(heap)
-        return obj
+        obj = heap.create(addr, T_LAMBDA)
+        obj.initialize(params, body, env)
 
-    def initialize(self, heap):
-        h = self.heap()
-        mem = h.mem
-        addr = self.addr()
-        h.mem[addr + 1] = h.new(T_EL).addr()  ## EL
-        h.mem[addr + 2] = h.new(T_T).addr()  ## T
-        h.mem[addr + 3] = h.new(T_EL).addr()  ## frame stack
-        assert not h.n_collect
+
+    def initialize(self, params, body, env):
+        self.PARAMS = params
+        self.BODY = body
+        self.ENV = env
 
     def size(self, _):
         return self.SIZE
@@ -316,19 +386,160 @@ class Root_(Object):
         for i in range(1, self.SIZE):
             visitor(a + i)
 
-    def EL(self):
+
+@gc_class(T_CONTINUATION)
+class Continuation(Object):
+    SIZE = 1 + 2  ## 1 for header, rest for fields
+
+    CONTINUATION = Reference(1)
+    STACK = Reference(2)
+
+    @classmethod
+    def new(cls, heap, continuation):
+        addr = heap.allocate(cls.SIZE)
+        obj = heap.create(addr, T_CONTINUATION)
+        obj.initialize(continuation)
+        return obj
+
+    def initialize(self, continuation):
+        self.CONTINUATION = continuation
+        self.STACK = self.heap().root().STACK
+
+    def size(self):
+        return self.SIZE
+
+    def visit(self, visitor):
+        a = self.addr()
+        for i in range(1, self.SIZE):
+            visit(a + i)
+
+
+@gc_class(T_INT)
+class Integer(Object):
+    SIZE = 1 + 1  ## 1 for header
+
+    I = IntegerField(1)
+
+    @classmethod
+    def new(cls, heap, value):
+        addr = heap.allocate(self.SIZE)
+        obj = heap.create(addr, T_INT)
+        obj.initialize()
+        return obj
+
+    def initialize(self, value):
+        self.I = value
+
+    def size(self):
+        return self.SIZE
+
+    def as_int(self):
+        return self.I
+
+
+@gc_class(T_FLOAT)
+class Float(Object):
+    @classmethod
+    def new(cls, heap, value):
+        size = 1 + cls.float_size(heap)
+        addr = heap.allocate(size)
+        obj = heap.create(addr, T_FLOAT)
+        obj.initialize(value)
+        return obj
+
+    @staticmethod
+    def float_size(heap):
+        n = struct.calcsize(">d")
+        bpc = heap.BYTES_PER_CELL
+        cells = (n + bpc - 1) // bpc
+        return cells
+
+    def initialize(self, value):
+        x = struct.pack(">d", value)
         h = self.heap()
-        el_addr = h.mem[self.addr() + 1]
-        return h.instantiate(el_addr)
+        bpc = h.BYTES_PER_CELL
+        pad = b"\x00" * (bpc - 1)
+        a = self.addr() + 1  ## 1 for header
+        for i in range(self.float_size(h)):
+            chunk = (x[: bpc] + pad)[: bpc]
+            h.mem[a + i] = struct.unpack(">I", chunk)[0]
+            x = x[bpc :]
+
+    def size(self, _):
+        return 1 + self.float_size(self.heap())
+
+    def to_float(self):
+        h = self.heap()
+        n = struct.calcsize(">d")
+        a = self.addr() + 1  ## 1 for header
+        bpc = h.BYTES_PER_CELL
+        b = b""
+        for i in range(self.float_size(h)):
+            b += struct.pack(">I", h.mem[a + i])
+        return struct.unpack(">d", b[: n])[0]
+
+
+@gc_class(T_ROOT)
+class Root(Object):
+    SIZE = 1 + 5  ## 1 for header, rest for fields
+
+    EL = Reference(1)
+    T = Reference(2)
+    FRAME_STACK = Reference(3)
+    ENV = Reference(4)
+    NEW = Reference(5)  ## for new objects
+
+    @classmethod
+    def new(cls, heap):
+        addr = heap.allocate(cls.SIZE)
+        obj = heap.create(addr, T_ROOT)
+        obj.initialize()
+        return obj
+
+    def initialize(self):
+        heap = self.heap()
+        EL = heap.new(T_EL)
+        self.EL = EL
+        self.T = heap.new(T_T)
+        self.FRAME_STACK = EL
+        self.ENV = EL
+        self.NEW = EL
+
+    def new_obj(self, otype, *args, **kw):
+        obj = self.heap().new(otype, *args, **kw)
+        self.NEW = obj
+        return obj
+
+    def release(self):
+        self.NEW = self.EL
+
+    def size(self, _):
+        return self.SIZE
+
+    def visit(self, visitor):
+        a = self.addr()
+        for i in range(1, self.SIZE):
+            visitor(a + i)
 
 
 def test():
     h = Heap_(64)
-    print(h.root().EL())
+    print(h.root().new_obj(T_SYMBOL, "lambda").to_str())
+    print(h.root().new_obj(T_FLOAT, 2.71828).to_float())
+    print("** ST", h.mem.store)
+    print("** RA", h.root_, h.root())
+    print("** EL", h.root().EL)
+    print("** ST", h.mem.store)
     h.collect()
-    print(h.root_)
-    print(h.root().EL())
-    print(h.mem.store)
+    print("** ST", h.mem.store)
+    print("** RA", h.root_, h.root())
+    print("** EL", h.root().EL)
+    print("** ST", h.mem.store)
+    h.collect()
+    print("** ST", h.mem.store)
+    print("** RA", h.root_, h.root())
+    print("** EL", h.root().EL)
+    print("** ST", h.mem.store)
 
 
 if __name__ == "__main__":
