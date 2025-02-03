@@ -189,7 +189,7 @@ class Frame:
         self.e = f.e if e is None else e
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.__dict__!r})"
+        return f"{self.__class__.__name__}({self.x}, {self.c}, {self.e})"
 
 
 ## }}}

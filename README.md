@@ -123,7 +123,10 @@ GPL license header):
 |rec2.py  |Add lwp.py features into rec.py, basically              |1300|1000|12.40|
 |yapl.py  |Yup, another one. Like lwp.py but faster                |1600|1200|24.34|
 
-The silly benchmark lives in the file `bench.lisp`.
+The silly benchmark lives in the file `bench.lisp`. FWIW the last 3 are
+slower because (cond) is implemented in terms of (if) and (quasiquote).
+OTOH, rec2.py has (do) aka (begin) and - gasp - (while) implemented as
+primitives which is why it's quicker than the other two.
 
 All of the implementations have the following limitations:
 
