@@ -17,6 +17,25 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+;; signed integer multiplication from subtraction and right shift (division)
+(define smul (lambda (x y) (do
+    (define umul (lambda (x y z) (
+        cond
+            ((equal? y 1) x) ;; y could have been -1 on entry to smul
+            ((equal? 0 x) z)
+            ((equal? 0 (band x 0x1)) (umul (div x 2) (add y y) z))
+            (#t (umul (div x 2) (add y y) (add z y)))
+    )))
+    (cond
+        ((equal? x 0) 0)
+        ((equal? y 0) 0)
+        ((lt? x 0) (neg (smul (neg x) y)))
+        ((equal? x 1) y)
+        ((equal? y 1) x)
+        (#t (copysign (umul x (abs y) 0) y))
+    )
+)))
+
 (define one (lambda ()
     (smul
         92837459838576324768578325623487965894695739794823743
@@ -41,29 +60,13 @@
     )
 )))
 
-;; some impls override these defs. make sure we're consistent.
-
-(define join (lambda (x y)
-    (cond
-        ((null? x) y)
-        (#t         (cons (car x) (join (cdr x) y)))
-    )
-))
-
-(define list (lambda (& args) args))
-
-(define rev (lambda (l) (
-    cond
-        ((null? l)          ())
-        (#t                 (join (rev (cdr l)) (list (car l))))
-)))
 
 (define four (lambda (n) ( do
     (two) (two) (two) (two) (two) (two) (two) (two) 
-    (rev (three n ()))
-    (rev (three n ()))
-    (rev (three n ()))
-    (rev (three n ()))
+    (reverse (three n ()))
+    (reverse (three n ()))
+    (reverse (three n ()))
+    (reverse (three n ()))
 )))
 
 (define five (lambda () (four 100)))
