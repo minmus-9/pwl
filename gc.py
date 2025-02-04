@@ -18,7 +18,7 @@ T_LAMBDA = 0x05
 T_CONTINUATION = 0x06
 T_INT = 0x07
 T_FLOAT = 0x08
-T_STR = 0x09
+T_STRING = 0x09
 T_PRIMITIVE = 0x0A
 T_OPAQUE = 0x0B
 T_ROOT = 0x0C
@@ -33,12 +33,22 @@ class Memory:
 
     def __getitem__(self, addr):
         assert 0 <= addr < len(self.store)
-        return self.store[addr]
+        ret = self.store[addr]
+        assert isinstance(ret, int)
+        return ret
 
     def __setitem__(self, addr, value):
         assert 0 <= addr < len(self.store)
         assert -0x80000000_00000000 <= value <= 0xFFFFFFFF_FFFFFFFF
         self.store[addr] = value & 0xFFFFFFFF_FFFFFFFF
+
+    def get_py(self, addr):
+        assert 0 <= addr < len(self.store)
+        return self.store[addr]
+
+    def set_py(self, addr, value):
+        assert 0 <= addr < len(self.store)
+        self.store[addr] = value
 
 
 class Heap_:
@@ -81,7 +91,7 @@ class Heap_:
         size = obj.size(self)
         to = self.hp
         for i in range(size):
-            self.mem[to + i] = self.mem[addr + i]
+            self.mem.set_py(to + i, self.mem.get_py(addr + i))
         self.set_forwarded(addr, to)
         self.hp += self.align(size, self.ALIGN)
         return to
@@ -223,6 +233,7 @@ class IntegerField:
 
 
 class Object:
+    OBJ_TYPE = 0
     HEADER = IntegerField(0)
 
     def __init__(self, heap, addr):
@@ -243,6 +254,9 @@ class Object:
     def __repr__(self):
         return f"{self.__class__.__name__}@{self.addr()}"
 
+    def __eq__(self, other):
+        return self.addr() == other.addr()
+
     ###
 
     @classmethod
@@ -261,7 +275,7 @@ class EL(Object):
     @classmethod
     def new(cls, heap):
         addr = heap.allocate(1)
-        obj = heap.create(addr, T_EL)
+        obj = heap.create(addr, cls.OBJ_TYPE)
         obj.initialize()
         return obj
 
@@ -277,7 +291,7 @@ class T(Object):
     @classmethod
     def new(cls, heap):
         addr = heap.allocate(1)
-        obj = heap.create(addr, T_T)
+        obj = heap.create(addr, cls.OBJ_TYPE)
         obj.initialize()
         return obj
 
@@ -299,7 +313,7 @@ class Symbol(Object):
         n = len(s)
         cells = (n + heap.BYTES_PER_CELL - 1) // heap.BYTES_PER_CELL
         addr = heap.allocate(cells + 1 + 1)  ## 1 for header, 1 for length
-        obj = heap.create(addr, T_SYMBOL)
+        obj = heap.create(addr, cls.OBJ_TYPE)
         obj.initialize(s)
         return obj
 
@@ -340,7 +354,7 @@ class Pair(Object):
     @classmethod
     def new(cls, heap, x, y):
         addr = heap.allocate(1 + 2)  ## 1 for header, 2 for pointers
-        obj = heap.create(addr, T_PAIR)
+        obj = heap.create(addr, cls.OBJ_TYPE)
         obj.initialize(x, y)
         return obj
 
@@ -369,7 +383,7 @@ class Lambda(Object):
     @classmethod
     def new(cls, heap, params, body, env):
         addr = heap.allocate(cls.SIZE)
-        obj = heap.create(addr, T_LAMBDA)
+        obj = heap.create(addr, cls.OBJ_TYPE)
         obj.initialize(params, body, env)
 
 
@@ -397,7 +411,7 @@ class Continuation(Object):
     @classmethod
     def new(cls, heap, continuation):
         addr = heap.allocate(cls.SIZE)
-        obj = heap.create(addr, T_CONTINUATION)
+        obj = heap.create(addr, cls.OBJ_TYPE)
         obj.initialize(continuation)
         return obj
 
@@ -423,7 +437,7 @@ class Integer(Object):
     @classmethod
     def new(cls, heap, value):
         addr = heap.allocate(self.SIZE)
-        obj = heap.create(addr, T_INT)
+        obj = heap.create(addr, cls.OBJ_TYPE)
         obj.initialize()
         return obj
 
@@ -443,7 +457,7 @@ class Float(Object):
     def new(cls, heap, value):
         size = 1 + cls.float_size(heap)
         addr = heap.allocate(size)
-        obj = heap.create(addr, T_FLOAT)
+        obj = heap.create(addr, cls.OBJ_TYPE)
         obj.initialize(value)
         return obj
 
@@ -479,6 +493,76 @@ class Float(Object):
         return struct.unpack(">d", b[: n])[0]
 
 
+@gc_class(T_STRING)
+class String(Object):
+    LENGTH = IntegerField(1)
+
+    @classmethod
+    def new(cls, heap, s):
+        assert type(s) is str and s  ## pylint: disable=unidiomatic-typecheck
+        s = s.encode(locale.getpreferredencoding())
+        n = len(s)
+        cells = (n + heap.BYTES_PER_CELL - 1) // heap.BYTES_PER_CELL
+        addr = heap.allocate(cells + 1 + 1)  ## 1 for header, 1 for length
+        obj = heap.create(addr, cls.OBJ_TYPE)
+        obj.initialize(s)
+        return obj
+
+    def initialize(self, s):
+        n = len(s)
+        heap = self.heap()
+        bpc = heap.BYTES_PER_CELL
+        pad = b"\x00" * (bpc - 1)
+        addr = self.addr() + 1  ## 1 for header
+        self.LENGTH = n
+        heap.mem[addr] = n
+        addr += 1  ## 1 for length
+        while s:
+            chunk, s = s[: bpc], s[bpc :]
+            heap.mem[addr] = struct.unpack(">I", (chunk + pad)[: bpc])[0]
+            addr += 1
+
+    def size(self, heap):
+        return self.LENGTH + 1 + 1  ## 1 for header, 1 for length
+
+    def to_str(self):
+        a = self.addr() + 1 + 1  ## 1 for header, 1 for length
+        heap = self.heap()
+        n = self.LENGTH
+        cells = (n + heap.BYTES_PER_CELL - 1) // heap.BYTES_PER_CELL
+        parts = []
+        for i in range(cells):
+            parts.append(struct.pack(">I", heap.mem[a + i]))
+        b = b"".join(parts)
+        return b[:n].decode(locale.getpreferredencoding())
+
+
+@gc_class(T_PRIMITIVE)
+class Primitive(Object):
+    SIZE = 1 + 1  ## 1 for header
+
+    @classmethod
+    def new(cls, heap, data):
+        addr = heap.allocate(cls.SIZE)
+        obj = heap.create(addr, cls.OBJ_TYPE)
+        obj.initialize(data)
+        return obj
+
+    def initialize(self, data):
+        self.heap().mem.set_py(self.addr() + 1, data)
+
+    def size(self, _):
+        return self.SIZE
+
+    def to_data(self):
+        return self.heap().mem.get_py(self.addr() + 1)
+
+
+@gc_class(T_OPAQUE)
+class Opaque(Primitive):
+    ...
+
+
 @gc_class(T_ROOT)
 class Root(Object):
     SIZE = 1 + 5  ## 1 for header, rest for fields
@@ -487,12 +571,12 @@ class Root(Object):
     T = Reference(2)
     FRAME_STACK = Reference(3)
     ENV = Reference(4)
-    NEW = Reference(5)  ## for new objects
+    NEW = Reference(5)  ## to keep new objects alive
 
     @classmethod
     def new(cls, heap):
         addr = heap.allocate(cls.SIZE)
-        obj = heap.create(addr, T_ROOT)
+        obj = heap.create(addr, cls.OBJ_TYPE)
         obj.initialize()
         return obj
 
@@ -522,10 +606,19 @@ class Root(Object):
             visitor(a + i)
 
 
+def cons(root, x, y):
+    ## careful!
+    root.NEW = 
+    return root.new_obj(T_PAIR, x, y)
+
+
 def test():
     h = Heap_(64)
-    print(h.root().new_obj(T_SYMBOL, "lambda").to_str())
+    print(h.root().new_obj(T_SYMBOL, "this is a longish string").to_str())
     print(h.root().new_obj(T_FLOAT, 2.71828).to_float())
+    def f():
+        return "hello, world!"
+    print(h.root().new_obj(T_OPAQUE, f).to_data()())
     print("** ST", h.mem.store)
     print("** RA", h.root_, h.root())
     print("** EL", h.root().EL)
