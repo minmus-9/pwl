@@ -1,112 +1,978 @@
 #!/usr/bin/env python3
-##
-## pwl - python with lisp, a collection of lisp evaluators for Python
-##       https://github.com/minmus-9/pwl
-## Copyright (C) 2025  Mark Hays (github:minmus-9)
-##
-## This program is free software: you can redistribute it and/or modify
-## it under the terms of the GNU General Public License as published by
-## the Free Software Foundation, either version 3 of the License, or
-## (at your option) any later version.
-##
-## This program is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with this program.  If not, see <https://www.gnu.org/licenses/>.
-##
-########################################################################
-##
-## this file is just for fiddling around with pwl
 
-## pylint: disable=invalid-name
+"r.py"
+
+## pylint: disable=invalid-name,unbalanced-tuple-unpacking
 ## XXX pylint: disable=missing-docstring
 
-#from pwl import lisp
-from lwp import Lisp, bounce
-lisp = Lisp()
+import locale
+import os
+import sys
+import traceback
 
 
-def go():
-    lisp.execute(open("lwp.lisp", "r").read())
-    _, cont = lisp.execute(  ## pylint: disable=unbalanced-tuple-unpacking
-        r"""
-(define n 0)
-(do
-    (define cont ())
-    (set! n (add 31 (call/cc (lambda (cc) (do (set! cont cc) 0)))))
-    cont
-)
-    """
-    )
-    print(lisp.lookup("n"))
-    lisp.call(cont, -20)  ## returns a Continuation, not interesting to print
-    print(lisp.lookup("n"))
-    lisp.call(cont, 11)
-    print(lisp.lookup("n"))
+## {{{ scanner
 
-    print(lisp.call(lisp.symbol("add"), 3, 5))
-    print(lisp.call("add", 3, 5))
-    print(lisp.execute("(add 3 5)")[0])
 
-    def f(*args):
-        assert len(args) in (1, 2)
-        if len(args) == 1:
-            (frame,) = args  ## lisp.py
-            out = (frame.c,)
+class Scanner:
+    ##  pylint: disable=too-many-instance-attributes
+
+    T_SYM = "sym"
+    T_INT = "int"
+    T_REAL = "real"
+    T_STR = "string"
+    T_LPAR = "("
+    T_RPAR = ")"
+    T_EOF = "eof"
+
+    S_SYM = "sym"  ## building symbol
+    S_CMNT = "comment"  ## comment to eol
+    S_STR = "string"  ## string to "
+    S_BS = "backslash"  ## saw \ inside "
+    S_COMMA = ","  ## saw ,
+
+    ESC = {"t": "\t", "n": "\n", "r": "\r", '"': '"', "\\": "\\"}
+
+    def __init__(self, callback):
+        self.callback = callback
+        self.token = []
+        self.add = self.token.append
+        self.pos = 0
+        self.state = self.S_SYM
+        self.stack = ""
+        self.c_map = {
+            "(": self.c_lpar,
+            ")": self.c_rpar,
+            ";": self.c_cmnt,
+            '"': self.c_quote,
+        }
+        self.lookup = self.c_map.get
+        self.s_map = {
+            self.S_BS: self.s_bs,
+            self.S_CMNT: self.s_comment,
+            self.S_STR: self.s_str,
+            self.S_SYM: self.s_sym,
+        }
+
+    def c_cmnt(self):
+        self.state = self.S_CMNT
+
+    def c_lpar(self):
+        self.stack += ")"
+        self.push(self.T_SYM)
+        self.push(self.T_LPAR)
+
+    def c_quote(self):
+        if self.token:
+            raise SyntaxError("quote is not a delimiter")
+        self.state = self.S_STR
+
+    def c_rpar(self):
+        if not self.stack:
+            raise SyntaxError("too many ')'")
+        c, self.stack = self.stack[-1], self.stack[:-1]
+        if c != ")":
+            raise SyntaxError(f"expected {c!r}, got ')'")
+        self.push(self.T_SYM)
+        self.push(self.T_RPAR)
+
+    def c_ws(self):
+        self.push(self.T_SYM)
+
+    def s_bs(self, ch):
+        c = self.ESC.get(ch)
+        if c is None:
+            raise SyntaxError("bad escape {ch!r}")
+        self.add(c)
+        self.state = self.S_STR
+
+    def s_comment(self, ch):
+        if ch in "\n\r":
+            self.state = self.S_SYM
+
+    def s_str(self, ch):
+        if ch == '"':
+            self.state = self.S_SYM
+            self.push(self.T_STR)
+        elif ch == "\\":
+            self.state = self.S_BS
         else:
-            g, frame = args  ## oo.py
-            out = (frame.c, g)
-        print("f", frame.__dict__)
-        ## recursive call to continuation we made above
-        ret = lisp.call(cont, lisp.lisp_value_to_py_value(frame.x)[-1])
-        return bounce(*out, ret)
+            self.add(ch)
 
-    ## jam f into the namespace. now it's an anonymous op.
-    lisp.define("f", f)
-    ## pylint: disable=consider-using-f-string
-    lisp.execute(
+    def s_sym(self, ch):
+        if ch in " \n\r\t":
+            self.push(self.T_SYM)
+        else:
+            f = self.lookup(ch)
+            if f:
+                f()
+            else:
+                self.add(ch)
+
+    def eof(self):
+        if self.stack:
+            raise SyntaxError(f"eof in {self.stack[-1]!r}")
+        self.push(self.T_SYM)
+        self.push(self.T_EOF)
+
+    def feed(self, text):
+        ## pylint: disable=too-many-branches,too-many-statements
+        if text is None:
+            return self.eof()
+        self.pos, n = 0, len(text)
+        while self.pos < n:
+            ch = text[self.pos]
+            self.pos += 1
+            self.s_map[self.state](ch)
+
+    def push(self, ttype):
+        t = "".join(self.token)
+        del self.token[:]
+        if ttype == self.T_SYM:
+            if not t:
+                return
+            try:
+                t = int(t, 0)
+                ttype = self.T_INT
+            except ValueError:
+                try:
+                    t = float(t)
+                    ttype = self.T_REAL
+                except:  ## pylint: disable=bare-except
+                    pass  ## value error, range error
+        self.callback(ttype, t)
+
+
+## }}}
+## {{{ parser
+
+
+class Parser:
+    def __init__(self, callback):
+        self.callback = callback
+        self.stack = []
+        self.scanner = Scanner(self.process_token)
+        self.feed = self.scanner.feed
+
+    def process_token(self, ttype, token):
+        ## pylint: disable=too-many-branches
+        if ttype == self.scanner.T_SYM:
+            self.add(symbol(token))
+        elif ttype == self.scanner.T_LPAR:
+            self.stack.append(Queue())
+        elif ttype == self.scanner.T_RPAR:
+            if not self.stack:
+                raise SyntaxError("too many ')'s")
+            l = self.stack.pop().head()
+            if not self.stack:
+                self.callback(l)
+            else:
+                self.add(l)
+        elif ttype in (
+            self.scanner.T_INT,
+            self.scanner.T_REAL,
+            self.scanner.T_STR,
+        ):
+            self.add(token)
+        elif ttype == self.scanner.T_EOF:
+            if self.stack:
+                raise SyntaxError("premature eof in '('")
+        else:
+            raise RuntimeError((ttype, token))
+
+    def add(self, x):
+        if not self.stack:
+            raise SyntaxError(f"expected '(' got {x!r}")
+        self.stack[-1].enqueue(x)
+
+
+## }}}
+## {{{ high level parsing routines
+
+
+def parse(text, callback):
+    p = Parser(callback)
+    p.feed(text)
+    p.feed(None)
+
+
+def load(filename, callback):
+    if os.path.isabs(filename):
+        path = filename
+    else:
+        for d in [os.path.dirname(__file__)] + sys.path:
+            path = os.path.join(d, filename)
+            if os.path.isfile(path):
+                break
+        else:
+            raise FileNotFoundError(filename)
+    with open(path, "r", encoding=locale.getpreferredencoding()) as fp:
+        parse(fp.read(), callback)
+
+
+## }}}
+## {{{ basics
+
+
+class error(Exception):
+    pass
+
+
+SENTINEL = object()
+EL = object()
+T = True
+
+
+class Symbol:
+    ## pylint: disable=too-few-public-methods
+
+    def __init__(self, s):
+        assert type(s) is str and s  ## pylint: disable=unidiomatic-typecheck
+        self.s = s
+
+    def __str__(self):
+        return self.s
+
+
+def symcheck(x):
+    if isinstance(x, Symbol):
+        return x
+    raise TypeError(f"expected symbol, got {x!r}")
+
+
+SYMTAB = {}
+
+
+def symbol(s):
+    return SYMTAB.setdefault(s, Symbol(s))
+
+
+def is_atom(x):
+    return isinstance(x, Symbol) or x is EL or x is T
+
+
+def eq(x, y):
+    return is_atom(x) and x is y
+
+
+def listcheck(x):
+    if isinstance(x, list):
+        return x
+    if x is EL:
+        raise TypeError("expected list, got ()")
+    raise TypeError(f"expected list, got {x!r}")
+
+
+def car(x):
+    return listcheck(x)[0]
+
+
+def cdr(x):
+    return EL if x is EL else listcheck(x)[1]
+
+
+def cons(x, y):
+    if y is not EL:
+        listcheck(y)
+    return [x, y]
+
+
+def set_car(x, y):
+    listcheck(x)[0] = y
+
+
+def set_cdr(x, y):
+    if y is not EL:
+        listcheck(y)
+    x[1] = y
+
+
+## }}}
+## {{{ environment and globals
+
+
+class Environment:
+    def __init__(self, params, args, parent):
+        self.p = parent
+        assert isinstance(parent, Environment) or parent is SENTINEL
+        self.t = {}
+        variadic = False
+        while params is not EL:
+            param, params = car(params), cdr(params)
+            symcheck(param)
+            if eq(param, symbol("&")):
+                variadic = True
+            elif variadic:
+                if params is not EL:
+                    raise SyntaxError("extra junk after '&'")
+                self.t[param] = args
+                return
+            elif args is EL:
+                raise SyntaxError("not enough args")
+            else:
+                arg, args = car(args), cdr(args)
+                self.t[param] = arg
+        if args is not EL:
+            raise SyntaxError("too many args")
+        if variadic:
+            raise SyntaxError("params end with '&'")
+
+    def get(self, sym, default):
+        symcheck(sym)
+        e = self
+        while e is not SENTINEL:
+            x = e.t.get(sym, SENTINEL)
+            if x is not SENTINEL:
+                return x
+            e = e.p
+        return default
+
+    def set(self, sym, value):
+        self.t[symcheck(sym)] = value
+        return EL
+
+    def setbang(self, sym, value):
+        symcheck(sym)
+        e = self
+        while e is not SENTINEL:
+            if sym in e.t:
+                e.t[sym] = value
+                return EL
+            e = e.p
+        raise NameError(str(sym))
+
+
+GLB = Environment(EL, EL, SENTINEL)
+GLB.set(symbol("#t"), T)
+
+
+def glbl(name):
+    def wrap(func):
+        GLB.set(symbol(name), func)
+        return func
+
+    return wrap
+
+
+def spcl(name):
+    def wrap(func):
+        GLB.set(symbol(name), func)
+        func.special = True
+        return func
+
+    return wrap
+
+
+## }}}
+## {{{ queue
+
+
+class Queue:
+    def __init__(self):
+        self.h = self.t = EL
+
+    def enqueue(self, x):
+        n = cons(x, EL)
+        if self.h is EL:
+            self.h = n
+        else:
+            set_cdr(self.t, n)
+        self.t = n
+
+    def dequeue(self):
+        n = self.h
+        if n is EL:
+            raise ValueError("queue empty")
+        self.h = cdr(n)
+        if self.h is EL:
+            self.t = EL
+        return car(n)
+
+    def head(self):
+        return self.h
+
+
+## }}}
+## {{{ lambda
+
+
+class Lambda:
+    ## pylint: disable=too-few-public-methods
+
+    special = False
+
+    def __init__(self, params, body, env):
+        self.p, self.b, self.e = params, body, env
+
+    def __call__(self, args, e):
+        p = e if self.special else self.e
+        e = Environment(self.p, args, p)
+        return leval(self.b, e)
+
+    def __str__(self):
+        return "(lambda " + stringify(self.p) + " " + stringify(self.b) + ")"
+
+
+## }}}
+## {{{ stringify
+
+
+def stringify(x):
+    if x is EL:
+        return "()"
+    if x is T:
+        return "#t"
+    if isinstance(x, (Symbol, int, float, str)):
+        return str(x)
+    if not isinstance(x, list):
+        if isinstance(x, Lambda):
+            return str(x)
+        if callable(x):
+            return "[primitive]"
+        return "[opaque]"
+    parts = []
+    while x is not EL:
+        parts.append(stringify(car(x)))
+        x = cdr(x)
+    return "(" + " ".join(parts) + ")"
+
+
+## }}}
+## {{{ eval
+
+
+def leval(x, e=SENTINEL):
+    ## pylint: disable=too-many-branches
+    e = GLB if e is SENTINEL else e
+    if isinstance(x, Symbol):
+        obj = e.get(x, SENTINEL)
+        if obj is SENTINEL:
+            raise NameError(x)
+        return obj
+    if isinstance(x, list):
+        sym, args = car(x), cdr(x)
+    elif isinstance(x, Lambda):
+        sym, args = x, EL
+    else:
+        return x
+    if isinstance(sym, Symbol):
+        op = e.get(sym, SENTINEL)
+        if op is not SENTINEL and getattr(op, "special", False):
+            return op(args, e)
+        proc = leval(sym, e)
+    elif callable(sym):
+        proc = sym
+    elif not isinstance(sym, list):
+        raise TypeError(f"expected proc/list, got {sym!r}")
+    else:
+        proc = leval(sym, e)
+
+    q = Queue()
+    while args is not EL:
+        q.enqueue(leval(car(args), e))
+        args = cdr(args)
+    return proc(q.head(), e)
+
+
+## }}}
+## {{{ unpack
+
+
+def unpack(args, n):
+    ret = []
+    for _ in range(n):
+        if args is EL:
+            raise TypeError(f"not enough args, need {n}")
+        ret.append(car(args))
+        args = cdr(args)
+    if args is not EL:
+        raise TypeError(f"too many args, need {n}")
+    return ret
+
+
+## }}}
+## {{{ special forms
+
+
+@spcl("define")
+def op_define(args, e):
+    name, value = unpack(args, 2)
+    return e.set(symcheck(name), leval(value, e))
+
+
+@spcl("cond")
+def op_cond(args, e):
+    while args is not EL:
+        predicate, consequent = unpack(car(args), 2)
+        args = cdr(args)
+        if leval(predicate, e) is not EL:
+            return leval(consequent, e)
+    return EL
+
+
+@spcl("lambda")
+def op_lambda(args, e):
+    params, body = unpack(args, 2)
+    return Lambda(params, body, e)
+
+
+@spcl("quote")
+def op_quote(args, _):
+    (x,) = unpack(args, 1)
+    return x
+
+
+@spcl("set!")
+def op_setbang(args, e):
+    name, value = unpack(args, 2)
+    e.setbang(symcheck(name), leval(value, e))
+    return EL
+
+
+@spcl("special")
+def op_special(args, e):
+    name, value = unpack(args, 2)
+    value = leval(value, e)
+    value.special = True
+    return e.set(symcheck(name), value)
+
+
+## }}}
+## {{{ procedures
+
+
+def unary(args, f):
+    (x,) = unpack(args, 1)
+    return f(x)
+
+
+def binary(args, f):
+    x, y = unpack(args, 2)
+    return f(x, y)
+
+
+@glbl("add")
+def op_add(args, _):
+    return binary(args, lambda x, y: x + y)
+
+
+@glbl("atom?")
+def op_atom(args, _):
+    (x,) = unpack(args, 1)
+    return T if is_atom(x) else EL
+
+
+@glbl("car")
+def op_car(args, _):
+    return unary(args, car)
+
+
+@glbl("cdr")
+def op_cdr(args, _):
+    return unary(args, cdr)
+
+
+@glbl("cons")
+def op_cons(args, _):
+    return binary(args, cons)
+
+
+@glbl("div")
+def op_div(args, _):
+    def f(x, y):
+        if isinstance(x, int) and isinstance(y, int):
+            return x // y
+        return x / y
+
+    return binary(args, f)
+
+
+@glbl("eq?")
+def op_eq(args, _):
+    def f(x, y):
+        return T if eq(x, y) else EL
+
+    return binary(args, f)
+
+
+@glbl("equal?")
+def op_equal(args, _):
+    def f(x, y):
+        return T if x == y else EL
+
+    return binary(args, f)
+
+
+@glbl("error")
+def op_error(args, e):
+    (x,) = unpack(args, 1)
+    raise error(leval(x, e))
+
+
+@glbl("eval")
+def op_eval(args, e):
+    try:
+        x, n_up = unpack(args, 2)
+    except TypeError:
+        (x,) = unpack(args, 1)
+        n_up = 0
+    if isinstance(x, str):
+        l = []
+        parse(x, lambda expr: l.append(leval(expr, e)))
+        x = l[-1] if l else EL
+    for _ in range(n_up):
+        e = e.p
+        if e is SENTINEL:
+            raise ValueError(f"cannot go up {n_up} levels")
+    return leval(x, e)
+
+
+@glbl("exit")
+def op_exit(args, _):
+    (x,) = unpack(args, 1)
+    if isinstance(x, int):
+        raise SystemExit(x)
+    raise SystemExit(stringify(x))
+
+
+@glbl("lt?")
+def op_lt(args, _):
+    def f(x, y):
+        return T if x < y else EL
+
+    return binary(args, f)
+
+
+@glbl("mul")
+def op_mul(args, _):
+    return binary(args, lambda x, y: x * y)
+
+
+@glbl("nand")
+def op_nand(args, _):
+    def f(x, y):
+        return ~(x & y)
+
+    return binary(args, f)
+
+
+@glbl("print")
+def op_print(args, _):
+    if args is EL:
+        print()
+        return EL
+    end = " "
+    while args is not EL:
+        x, args = car(args), cdr(args)
+        if args is EL:
+            end = "\n"
+        print(stringify(x), end=end)
+    return EL
+
+
+@glbl("set-car!")
+def op_setcar(args, _):
+    return binary(args, set_car)
+
+
+@glbl("set-cdr!")
+def op_setcdr(args, _):
+    return binary(args, set_cdr)
+
+
+@glbl("sub")
+def op_sub(args, _):
+    return binary(args, lambda x, y: x - y)
+
+
+@glbl("type")
+def op_type(args, _):
+    ## pylint: disable=too-many-return-statements
+    (x,) = unpack(args, 1)
+    if x is EL:
+        return symbol("()")
+    if x is T:
+        return symbol("#t")
+    if isinstance(x, Symbol):
+        return symbol("symbol")
+    if isinstance(x, int):
+        return symbol("int")
+    if isinstance(x, float):
+        return symbol("float")
+    if isinstance(x, str):
+        return symbol("str")
+    if isinstance(x, Lambda):
+        return symbol("lambda")
+    if not isinstance(x, list):
+        if callable(x):
+            return symbol("primitive")
+        return symbol("opaque")
+    return symbol("list")
+
+
+@glbl("while")
+def op_while(args, e):
+    (x,) = unpack(args, 1)
+    if not callable(x):
+        raise TypeError(f"expected callable, got {x!r}")
+
+    while leval(x, e) is not EL:
+        pass
+    return EL
+
+
+## }}}
+## {{{ stdlib
+
+
+def boot():
+    parse(
         """
-(print f)
-(define g (lambda (x) (f {} n x)))
-    """.format(
-            "(mul 2 2)"
+(define null? (lambda (x) (if x () #t)))
+(define list? (lambda (x) (if (eq? (type x) (quote list)) #t ())))
+(define pair? list?)
+(define list (lambda (& args) args))
+(define cadr (lambda (l) (car (cdr l))))
+(define caddr (lambda (l) (car (cdr (cdr l)))))
+(define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
+(define caddddr (lambda (l) (car (cdr (cdr (cdr (cdr l)))))))
+(define cadddddr (lambda (l) (car (cdr (cdr (cdr (cdr (cdr l))))))))
+(special if (lambda (__special_if_p__ __special_if_c__ __special_if_a__)
+    (cond
+        ((eval __special_if_p__ 1) (eval __special_if_c__ 1))
+        (#t (eval __special_if_a__ 1))
+    )
+))
+(define foreach (lambda (f l)
+    (while (lambda ()
+        (if
+            (null? l)
+            ()
+            ((lambda (x y z) z)
+                (f (car l))
+                (set! l (cdr l))
+                #t
+            )
+        )
+    ))
+))
+(define last (lambda (l)
+    (if
+        (null? l)
+        (error "list is empty")
+        ((lambda (x y z) z)
+            (define r ())
+            (while (lambda ()
+                (if
+                    (null? l)
+                    ()
+                    ((lambda (x y z) z)
+                        (set! r (car l))
+                        (set! l (cdr l))
+                        #t
+                    )
+                )
+            ))
+            r
         )
     )
-    lisp.execute("(g 3) (define n 0) (g 3)")
-    g = lisp.lookup("g")
+))
+(define do (lambda (& args) (last args)))
 
-    def G(x):
-        return lisp.call(g, x)
+(special and (lambda (__special_and2_x__ __special_and2_y__)
+    (if (eval __special_and2_x__ 1) (eval __special_and2_y__ 1) ())
+))
+(special or (lambda (__special_or2_x__ __special_or2_y__)
+    (if (eval __special_or2_x__ 1) #t (eval __special_or2_y__ 1))
+))
+(define builder (lambda () (do
+    (define h ())
+    (define t ())
+    (lambda (x) (do
+        (define n (list x))
+        (if
+            (null? h)
+            (set! h n)
+            (set-cdr! t n)
+        )
+        (set! t n)
+        h
+    ))
+)))
+(define join (lambda (x y)  ;; yuck. but nonrecursive :-/
+    (cond
+        ((null? x) y)
+        ((null? y) x)
+        (#t (do
+            (define h ())
+            (define t ())
+            (define f (lambda ()
+                (if
+                    (null? x)
+                    ()
+                    (do
+                        (define n (list (car x)))
+                        (if
+                            (null? h)
+                            (set! h n)
+                            (set-cdr! t n)
+                        )
+                        (set! t n)
+                        (set! x (cdr x))
+                        #t
+                    )
+                )
+            ))
+            (while f) (set! x y) (while f)
+            h
+        ))
+    )
+))
+(define join (lambda (x y)
+    (if 
+        (null? x)
+        y
+        (cons (car x) (join (cdr x) y))
+    )
+))
+;;; definition of let sicp p.87
+(special let (lambda (__special_let_vars__ __special_let_body__) (do
+    ;; (let ((x a) (y b)) body)
 
-    G(7)
+    (define __special_let_vdecls__ ())  ;; (x y)
+    (define __special_let_vvals__ ())   ;; ((eval a) (eval b))
+    ;; declare one var
+    (define __special_let_decl1__ (lambda (__special_let_decl1_var__ __special_let_decl1_value__) (do
+        (set! __special_let_vdecls__ (join __special_let_vdecls__ (list __special_let_decl1_var__)))
+        (set! __special_let_vvals__  (join __special_let_vvals__  (list (eval __special_let_decl1_value__))))
+    )))
+    ;; declare the next item from vars
+    (define __special_let_next__ (lambda () (do
+        (__special_let_decl1__ (car (car __special_let_vars__)) (car (cdr (car __special_let_vars__))))
+        (set! __special_let_vars__ (cdr __special_let_vars__))
+    )))
+    ;; declare everthing, then return (doit)
+    (define __special_let_decls__ (lambda () (
+        cond
+            ((null? __special_let_vars__)   (__special_let_doit__))
+            (#t (do
+                    (__special_let_next__) (__special_let_decls__)
+            ))
+    )))
+    (define __special_let_doit__ (lambda () (do
+        (define __special_let_doit_head__ (join (list (quote lambda)) (list __special_let_vdecls__)))
+        (define __special_let_doit_mid__  (join __special_let_doit_head__ (list __special_let_body__)))
+        (define __special_let_doit_lam__  (join (list __special_let_doit_mid__) __special_let_vvals__))
+        (eval __special_let_doit_lam__ 1)
+    )))
+    (__special_let_decls__)
+)))
 
-    @lisp.ffi("test")
-    def h(g, args):
-        (x,) = args
-        print("h got", x)
-        return x + 17
+(define neg (lambda (x) (sub 0 x)))
+(define add (lambda (x y) (sub x (neg y))))
+(define mod (lambda (n d) (sub n (mul d (div n d)))))
+(define abs (lambda (x) (if (lt? x 0) (neg x) x)))
+(define copysign (lambda (x y) (if (lt? y 0) (neg (abs x)) (abs x))))
+(define le? (lambda (x y) (or (lt? x y) (equal? x y))))
+(define ge? (lambda (x y) (not (lt? x y))))
+(define gt? (lambda (x y) (not (le? x y))))
+(define bnot (lambda (x) (nand x x)))
+(define band (lambda (x y) (bnot (nand x y))))
+(define bor  (lambda (x y) (nand (bnot x) (bnot y))))
+(define bxor (lambda (x y) (band (nand x y) (bor x y))))
+(define lshift (lambda (x n)
+    (cond
+        ((equal? n 0)   x)
+        ((equal? n 1)   (add x x))
+        (#t             (lshift (lshift x (sub n 1)) 1))
+    )
+))
+(define rshift (lambda (x n)
+    (cond
+        ((equal? n 0)   x)
+        ((equal? n 1)   (div x 2))
+        (#t             (rshift (rshift x (sub n 1)) 1))
+    )
+))
 
-    print(lisp.execute("(test 23)"))
+    """,
+        leval,
+    )
 
-    @lisp.glbl("test2")
-    def j(g, frame):
-        (break_,) = lisp.unpack(frame.x, 1)
-        print("in j")
-        ## to break from loop-with-break
-        return bounce(lisp.eval_, g, lisp.Frame(frame, x=break_))
-        ## normal return will keep looping below
-        return bounce(frame.c, g, g.rpn.EL)
 
-    print(lisp.execute("(loop-with-break test2)"))
+boot()
 
-    print("OK")
+
+## }}}
+## {{{ main repl
+
+
+def repl(callback):
+    try:
+        import readline as _  ## pylint: disable=import-outside-toplevel
+    except ImportError:
+        pass
+
+    ## pylint: disable=unused-variable
+    p, rc, stop = Parser(callback), 0, False
+
+    def feed(x):
+        nonlocal p, rc, stop
+        try:
+            p.feed(x)
+        except SystemExit as exc:
+            stop, rc = True, exc.args[0]
+        except:  ## pylint: disable=bare-except
+            p = Parser(callback)
+            traceback.print_exception(*sys.exc_info())
+
+    while not stop:
+        try:
+            line = input("lisp> ") + "\n"
+        except (EOFError, KeyboardInterrupt):
+            feed(None)
+            break
+        feed(line)
+    print("\nbye")
+    return rc
+
+
+def main():
+    try:
+        sys.set_int_max_str_digits(0)
+    except AttributeError:
+        pass
+
+    def callback(sexpr):
+        try:
+            value = leval(sexpr)
+        except SystemExit:
+            raise
+        except:
+            print("Offender (pyth):", sexpr)
+            print("Offender (lisp):", stringify(sexpr), "\n")
+            raise
+        if value is not EL:
+            print(stringify(value))
+
+    stop = True
+    for filename in sys.argv[1:]:
+        if filename == "+":
+            continue
+        if filename == "-":
+            stop = False
+            break
+        load(filename, callback=callback)
+        stop = True
+    if not stop:
+        raise SystemExit(repl(callback))
+
+
+## }}}
 
 
 if __name__ == "__main__":
-    go()
+    main()
 
 
 ## EOF
