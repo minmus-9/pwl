@@ -101,6 +101,10 @@ class Heap_:
         self.from_space = self.to_space
         self.to_space = self.hp
         self.limit = self.hp + self.size // 2
+        addr = self.hp
+        #while addr < self.limit:
+        #    self.mem.set_py(addr, 0)
+        #    addr += 1
 
     def visit_field(self, field_addr):
         from_addr = self.mem[field_addr]
@@ -565,13 +569,17 @@ class Opaque(Primitive):
 
 @gc_class(T_ROOT)
 class Root(Object):
-    SIZE = 1 + 5  ## 1 for header, rest for fields
+    SIZE = 1 + 9  ## 1 for header, rest for fields
 
     EL = Reference(1)
     T = Reference(2)
     FRAME_STACK = Reference(3)
     ENV = Reference(4)
     NEW = Reference(5)  ## to keep new objects alive
+    X = Reference(6)  ## to keep arguments alive
+    Y = Reference(7)
+    Z = Reference(8)
+    T = Reference(9)
 
     @classmethod
     def new(cls, heap):
@@ -608,12 +616,15 @@ class Root(Object):
 
 def cons(root, x, y):
     ## careful!
-    root.NEW = 
-    return root.new_obj(T_PAIR, x, y)
+    root.X, root.Y = x, y
+    ret = root.new_obj(T_PAIR, x, y)
+    root.X, root.Y = root.EL, root.EL
+    return ret
 
 
 def test():
-    h = Heap_(64)
+    h = Heap_(72)
+    print(cons(h.root(), h.root().EL, h.root().EL))
     print(h.root().new_obj(T_SYMBOL, "this is a longish string").to_str())
     print(h.root().new_obj(T_FLOAT, 2.71828).to_float())
     def f():
