@@ -17,9 +17,9 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"lisp.py -- a fast recursive lisp with stdlib in under 1k lines"
+"lisp.py -- a fast recursive lisp with stdlib in ~1k lines"
 
-## pylint: disable=invalid-name,unbalanced-tuple-unpacking
+## pylint: disable=invalid-name,unbalanced-tuple-unpacking,too-many-lines
 ## XXX pylint: disable=missing-docstring
 
 import locale

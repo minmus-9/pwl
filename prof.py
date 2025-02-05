@@ -21,6 +21,7 @@
 
 ## pylint: disable=invalid-name
 
+import os
 import sys
 
 import pstats
@@ -40,24 +41,17 @@ import cProfile
 
 PROFILE = "/dev/shm/profile"
 
-if 1:
-    cProfile.run("""
+file_or_dir = sys.argv[1]
+if os.path.isfile(file_or_dir):
+    file_or_dir = os.path.dirname(file_or_dir)
+if not os.path.isdir(file_or_dir):
+    raise ValueError(f"cannot find {file_or_dir!r}")
+sys.path.insert(0, file_or_dir)
 from lisp import main
-import sys
-sys.argv[1:] = ["bench.lisp"]
-main()
-    """, PROFILE)
+sys.argv[1:] = sys.argv[2:]
+
+cProfile.run("main()", PROFILE)
 
 pstats.Stats(PROFILE).strip_dirs().sort_stats("tottime").print_stats(.15)
 
-raise SystemExit()
-
-from pwl import lisp, load  ## pylint: disable=unused-import
-
-load()
-
-sys.set_int_max_str_digits(0)
-
-code = open("bench.lisp").read()
-
-p.run("print(lisp.execute(code))")
+## EOF
