@@ -164,6 +164,12 @@ def set_cdr(x, y):
     return EL
 
 
+def splitcar(x):
+    if not isinstance(x, Pair):
+        raise TypeError(f"expected pair, got {x!r}")
+    return x[0], x[1]
+
+
 ## }}}
 ## {{{ stack
 
@@ -184,7 +190,7 @@ class Stack:
     def pop(self):
         if self.s is EL:
             raise ValueError("stack is empty")
-        ret, self.s = car(self.s), cdr(self.s)
+        ret, self.s = splitcar(self.s)
         return ret
 
     ## for continuations
@@ -270,7 +276,7 @@ class Environment:
         pl, al = params, args
         variadic = False
         while params is not EL:
-            p, params = car(params), cdr(params)
+            p, params = splitcar(params)
             if not isinstance(p, Symbol):
                 raise TypeError(
                     f"expected symbol, got {p!r} at {pl!r} <= {al!r}"
@@ -285,7 +291,7 @@ class Environment:
             elif args is EL:
                 raise TypeError(f"not enough args at {pl!r} <= {al!r}")
             else:
-                a, args = car(args), cdr(args)
+                a, args = splitcar(args)
                 self.d[p] = a
         if variadic:
             raise SyntaxError(f"'&' ends param list {pl!r} <= {al!r}")
@@ -572,7 +578,7 @@ class Parser:
 
         ## NB we know this is a well-formed list
         while sexpr is not EL:
-            elt, sexpr = car(sexpr), cdr(sexpr)
+            elt, sexpr = splitcar(sexpr)
             if isinstance(elt, Symbol) and elt in self.q_map:
                 elt, sexpr = self.process_syms(elt, sexpr)
             q.enqueue(elt)
@@ -582,7 +588,7 @@ class Parser:
         replacement = self.q_map[elt]
         if sexpr is EL:
             raise SyntaxError(f"got {elt!r} at end of list")
-        quoted, sexpr = car(sexpr), cdr(sexpr)
+        quoted, sexpr = splitcar(sexpr)
         if isinstance(quoted, Symbol) and quoted in self.q_map:
             quoted, sexpr = self.process_syms(quoted, sexpr)
         elt = cons(replacement, cons(quoted, EL))
@@ -752,7 +758,7 @@ def stringify(sexpr, env=SENTINEL):
 
 def stringify_setup(frame, args):
     if isinstance(args, Pair):
-        arg, args = car(args), cdr(args)
+        arg, args = splitcar(args)
     else:
         arg, args = args, EL
         stack.push(Frame(frame, x="."))
@@ -811,7 +817,7 @@ def leval(sexpr, env=SENTINEL):
 
 def eval_setup(frame, args):
     if isinstance(args, Pair):
-        arg, args = car(args), cdr(args)
+        arg, args = splitcar(args)
     else:
         arg, args = args, EL
     stack.push(frame, x=args)
@@ -872,7 +878,7 @@ def leval_(frame):
             raise NameError(x)
         return bounce(frame.c, obj)
     if isinstance(x, Pair):
-        sym, args = car(x), cdr(x)
+        sym, args = splitcar(x)
     elif isinstance(x, Lambda):
         sym, args = x, EL
     else:
@@ -898,8 +904,7 @@ def leval_(frame):
 
 def do_ffi(frame):
     af = frame.x
-    args = car(af)
-    func = cdr(af)
+    args, func = splitcar(af)
     stack.push(frame, x=func)
 
     if args is EL:
@@ -915,7 +920,7 @@ def lisp_value_to_py_value(x):
 
 
 def lv2pv_setup(frame, args):
-    arg, args = car(args), cdr(args)
+    arg, args = splitcar(args)
     stack.push(frame, x=args)
     return bounce(
         lisp_value_to_py_value_, Frame(frame, x=arg, c=lv2pv_next_arg)
@@ -1008,8 +1013,8 @@ def ffi_args_done(args):
 def lisp_list_to_py_list(lst):
     ret = []
     while lst is not EL:
-        ret.append(car(lst))
-        lst = cdr(lst)
+        x, lst = splitcar(lst)
+        ret.append(x)
     return ret
 
 
@@ -1055,22 +1060,47 @@ def ffi(name):
 
 
 def unpack(args, n):
-    al = args
     ret = []
     for _ in range(n):
         if args is EL:
-            raise TypeError(f"not enough args, need {n} from {al!r}")
-        if not isinstance(args, Pair):
-            raise TypeError(f"malformed args, need {n} from {al!r}")
-        ret.append(car(args))
-        args = cdr(args)
+            raise TypeError(f"not enough args, need {n}")
+        arg, args = splitcar(args)
+        ret.append(arg)
     if args is not EL:
-        raise TypeError(f"too many args, need {n} from {al!r}")
+        raise TypeError(f"too many args, need {n}")
     return ret
 
 
 ## }}}
 ## {{{ special forms
+
+
+def op_cond_setup(frame, args):
+    head, args = splitcar(args)
+    predicate, consequent = unpack(head, 2)
+
+    stack.push(frame, x=cons(args, consequent))
+    return bounce(leval_, Frame(frame, c=op_cond_cont, x=predicate))
+
+
+def op_cond_cont(value):
+    frame = stack.pop()
+    args, consequent = splitcar(frame.x)
+
+    if value is not EL:
+        return bounce(leval_, Frame(frame, x=consequent))
+    if args is EL:
+        return bounce(frame.c, EL)
+    return op_cond_setup(frame, args)
+
+
+@spcl("cond")
+def op_cond(frame):
+    args = frame.x
+    if args is EL:
+        return bounce(frame.c, EL)
+
+    return op_cond_setup(frame, args)
 
 
 def op_define_cont(value):
@@ -1195,7 +1225,7 @@ def op_trap(frame):
 
 
 def qq_list_setup(frame, form):
-    elt, form = car(form), cdr(form)
+    elt, form = splitcar(form)
     if not (isinstance(form, Pair) or form is EL):
         raise TypeError(f"expected list, got {form!r}")
     stack.push(frame, x=form)
@@ -1236,7 +1266,7 @@ def qq_spliced(value):
     while value is not EL:
         if not isinstance(value, Pair):
             raise TypeError(f"expected list, got {value!r}")
-        elt, value = car(value), cdr(value)
+        elt, value = splitcar(value)
         if value is EL:
             stack.push(frame, x=form)
             return bounce(qq_list_cont, elt)
@@ -1418,6 +1448,15 @@ def op_exit(frame):
 ###
 
 
+@glbl("last")
+def op_last(frame):
+    (x,) = unpack(frame.x, 1)
+    ret = EL
+    while x is not EL:
+        ret, x = splitcar(x)
+    return bounce(frame.c, ret)
+
+
 @glbl("lt?")
 def op_lt(frame):
     def f(x, y):
@@ -1448,6 +1487,12 @@ def op_nand(frame):
     return binary(frame, f)
 
 
+@glbl("null?")
+def op_null(frame):
+    (x,) = unpack(frame.x, 1)
+    return bounce(frame.c, T if x is EL else EL)
+
+
 ###
 
 
@@ -1460,7 +1505,7 @@ def op_print_cont(value):
         return bounce(frame.c, EL)
     print(value, end=" ")
 
-    arg, args = car(args), cdr(args)
+    arg, args = splitcar(args)
 
     stack.push(frame, x=args)
     return bounce(stringify_, Frame(frame, x=arg, c=op_print_cont))
@@ -1476,7 +1521,7 @@ def op_print(frame):
         print()
         return bounce(frame.c, EL)
 
-    arg, args = car(args), cdr(args)
+    arg, args = splitcar(args)
 
     stack.push(frame, x=args)
     return bounce(stringify_, Frame(frame, x=arg, c=op_print_cont))
@@ -1538,6 +1583,28 @@ def op_type(frame):
         return symbol("opaque")
 
     return unary(frame, f)
+
+
+###
+
+
+def op_while_cont(value):
+    frame = stack.pop()
+
+    if value is EL:
+        return bounce(frame.c, EL)
+    stack.push(frame)
+    return bounce(leval_, Frame(frame, c=op_while_cont))
+
+
+@glbl("while")
+def op_while(frame):
+    (x,) = unpack(frame.x, 1)
+    if not callable(x):
+        raise TypeError(f"expected callable, got {x!r}")
+
+    stack.push(frame, x=x)
+    return bounce(leval_, Frame(frame, x=x, c=op_while_cont))
 
 
 ## }}}

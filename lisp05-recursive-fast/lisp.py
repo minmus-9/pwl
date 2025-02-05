@@ -480,7 +480,6 @@ def leval(x, e=SENTINEL):
         raise TypeError(f"expected proc/list, got {sym!r}")
     else:
         proc = leval(sym, e)
-        assert proc is not True
     if not callable(proc):
         raise TypeError(f"expected proc, got {proc!r}")
 
