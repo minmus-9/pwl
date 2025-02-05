@@ -26,7 +26,6 @@
 (define unquote-splicing (lambda (x) (error "cannot unquote-splicing here")))
 
 ;; used everywhere
-(define null? (lambda (x) (if (eq? x ()) #t ())))
 (define pair? (lambda (x) (if (eq? (type x) 'pair) #t ())))
 (define list  (lambda (& args) args))
 
@@ -35,31 +34,6 @@
 (define caddr (lambda (l) (car (cdr (cdr l)))))
 (define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
 (define caddddr (lambda (l) (car (cdr (cdr (cdr (cdr l)))))))
-
-;; }}}
-;; {{{ last
-
-(define last (lambda (l)
-    (if
-        (null? l)
-        ()
-        ((lambda (c)        ;; <= top
-            (if
-                (null? (cdr l))
-                (car l)
-                (if         ;; use if to sequence 2 tasks...
-                    (set! l (cdr l))
-                    ()      ;; set! returns () so...
-                    (c c)   ;; ... unconditional jump back to top
-                )
-            )
-        ) (call/cc (lambda (cc) cc)) )  ;; params at the top.
-                                        ;; initial values at the bottom.
-                                        ;; code goes in between.
-                                        ;; hahaha love it!
-    )
-))
-
 
 ;; }}}
 ;; {{{ begin/do
@@ -151,23 +125,6 @@
     (define a (cdr funcargs))
     `(define ,f (lambda (,@a) (do ,@body)))
 )))
-
-;; }}}
-;; {{{ cond
-
-(special cond (lambda (& __special_cond_pcs__)
-    (eval (cond$ __special_cond_pcs__) 1)))
-
-(define cond$ (lambda (__special_cond_pcs__)
-    (if
-        (null? __special_cond_pcs__)
-        ()
-        `(if
-            ,(car  (car __special_cond_pcs__))
-            ,(cadr (car __special_cond_pcs__))
-            ,(cond$ (cdr __special_cond_pcs__)))
-    )
-))
 
 ;; }}}
 ;; {{{ bitwise ops
@@ -637,7 +594,7 @@
 )
 
 ;; }}}
-;; {{{ looping: loop, while, until, for
+;; {{{ looping: loop, for
 
 ;; call f in a loop forever
 (def (loop f)
@@ -660,28 +617,6 @@
         brk
         (g)
         ()
-    )
-)
-
-;; loop while f returns true
-(def (while f)
-    (define c ())
-    (define flag (call/cc (lambda (cc) (do (set! c cc) #t))))
-    (if
-        flag
-        (c (f))
-        ()
-    )
-)
-
-;; loop until f returns true
-(def (until f)
-    (define c ())
-    (define flag (call/cc (lambda (cc) (do (set! c cc) ()))))
-    (if
-        flag
-        ()
-        (c (f))
     )
 )
 
