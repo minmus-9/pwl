@@ -37,6 +37,11 @@ you want to run:
 ./lisp.py   + stdlib.lisp runtime.lisp cont.lisp lisp.lisp -
 ./oo.py     + stdlib.lisp runtime.lisp cont.lisp lisp.lisp -
 ./pylisp.py + stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp -
+./pwl.py    + -
+./lwp.py    + lwp.lisp -
+./rec2.py   + rec2.lisp -
+./yapl.py   + lwp.lisp -
+./rec3.py   + -
 ```
 will run `easy.py`, execute `stdlib.lisp`, and the '-' will pop you into the
 repl. If you omit the '-', the other files will be executed and the program
@@ -50,11 +55,11 @@ decimal digits).
 
 If you want to exercise everything, try
 ```
-./pylisp.py + stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp sicp.lisp -
+./pwl.py + sicp.lisp bench.lisp
 ```
 or
 ```
-make && ./pwl.py + sicp.lisp -
+make && ./pwl.py + sicp.lisp bench.lisp
 ```
 The file `pwl.py` includes all the standard lisp files described below. Saves
 some typing. Don't forget to run `make` the first time you run `pwl.py`!
@@ -102,6 +107,9 @@ There are only 2 primitives that won't run with `easy.py` and one of these
 could be back-ported if desired. The exception is `call/cc` that requires
 at least `cont.py` (see below).
 
+Some of the implementations support additional special forms and/or primitives.
+See the source for details.
+
 ---
 ## The Implementations
 
@@ -110,17 +118,17 @@ GPL license header):
 
 |File|Description|Lines|SLOC|Benchmark Time|
 |---------|--------------------------------------------------------|----|----|-----|
-|easy.py  |Pure-recursive implementation with a problem            | 500| 400|0.748|
-|rec.py   |Fixes easy.py's problem, but still has limited recursion| 650| 500|1.483|
-|cont.py  |Features "heap-based" recursion and continuations       |1000| 700|4.664|
-|lisp.py  |Add FFI, API, quasiquote and friends                    |1500|1100|4.710|
-|oo.py    |OO version of lisp.py                                   |1550|1150|4.449|
-|pylisp.py|Add an FFI-based runtime to oo.py using its API         | 250| 200|4.676|
-|pwl.py   |Inline all the stdlibs, call pylisp.py                  |1100| 800|4.722|
-|lwp.py   |From scratch redo of pylisp.py                          |2150|1700|45.22| <= wow
-|rec2.py  |Add lwp.py features into rec.py, basically              |1300|1000|12.40|
-|yapl.py  |Yup, another one. Like lwp.py but faster                |1600|1200|24.34|
-|rec3.py  |Recursive lisp with stdlib built in, under 1k LOC       |1000|
+|easy.py  |Pure-recursive implementation with a problem            | 500| 400|3.054|
+|rec.py   |Fixes easy.py's problem, but still has limited recursion| 650| 500|5.520|
+|cont.py  |Features "heap-based" recursion and continuations       |1000| 700|15.27|
+|lisp.py  |Add FFI, API, quasiquote and friends                    |1500|1100|14.98|
+|oo.py    |OO version of lisp.py                                   |1550|1150|14.43|
+|pylisp.py|Add an FFI-based runtime to oo.py using its API         | 250| 200|14.54|
+|pwl.py   |Inline all the stdlibs, call pylisp.py                  |1100| 800|14.47|
+|lwp.py   |From scratch redo of pylisp.py                          |2150|1700|65.25| <= s.l.o.w. wow
+|rec2.py  |Add lwp.py features into rec.py, basically              |1300|1000|crash|
+|yapl.py  |Yup, another one. Like lwp.py but faster                |1600|1200|34.29|
+|rec3.py  |Recursive lisp with stdlib built in, under 1k LOC       |1000| 800|0.864| <= fastest
 
 The silly benchmark lives in the file `bench.lisp`. FWIW the last 3 are
 slower because (cond) is implemented in terms of (if) and (quasiquote).
@@ -356,6 +364,35 @@ and `lisp.py` in order to run. Just saves some typing. Don't forget to run
 `make` if you change any of the lisp libs (see below).
 
 ---
+### lwp.py
+
+This is a rewrite of pylisp.py/pwl.py that allows experimentation with
+different object representations. As such, it is the slowest implementation
+by far.
+
+---
+
+### rec2.py
+
+This is a recursive one that implements some of lwp.py's features. It passes
+sicp.lisp but crashes on the benchmark.
+
+---
+
+### yapl.py
+
+And another one, in case you need it. It's similar to lwp.py in terms of
+capabilities but roughly twice as fast. This is the reference implementation
+for CPS and trampolining a full runtime including quasiquote.
+
+---
+
+### rec3.py
+
+This is the recommended recursive implementation to use. It has been optimized
+a bit and is the fastest one in the bunch.
+
+---
 ## Included lisp files
 
 |File|Description|
@@ -366,6 +403,8 @@ and `lisp.py` in order to run. Just saves some typing. Don't forget to run
 |cont.lisp   | Stuff that uses continuations (lisp.py and up) |
 |lisp.lisp   | Stuff that uses quasiquote |
 |pylisp.lisp | Additional FFI runtime support for pylisp.py and up |
+|lwp.lisp    | Full runtime for lwp.py and yapl.py |
+|rec2.lisp   | Full runtime for rec2.py |
 
 ### `stdlib.lisp`
 
@@ -411,6 +450,15 @@ provides other useful runtime services.
 This file requires `lisp.py` and `pylisp.py` and consists of a bunch of
 FFI interface wrappers whose Python implementations live in `pylisp.py`.
 `lisp.py` provides the FFI interface itself which is why it is needed.
+
+### `lwp.lisp`
+
+This is the full runtime for lwp.py and yapl.py. Nonrecursive and slow!
+
+### `rec2.lisp`
+
+This is the runtime for rec2.py and is heavily based on the abomination
+(while).
 
 ---
 ## Notes on the representation of ()...

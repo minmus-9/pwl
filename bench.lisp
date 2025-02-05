@@ -96,7 +96,7 @@
     (join (reverse (three n ())) (reverse (three n ())))
 )))
 
-(define five (lambda () (four 100)))
+(define five (lambda () (four 80)))
 
 (five)
 
