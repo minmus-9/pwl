@@ -858,46 +858,30 @@ def boot():
 (define band (lambda (x y) (bnot (nand x y))))
 (define bor  (lambda (x y) (nand (bnot x) (bnot y))))
 (define bxor (lambda (x y) (band (nand x y) (bor x y))))
+
 ;; signed integer multiplication from subtraction and right shift (division)
-(define umul (lambda (x y accum) (do
-    (define update (lambda () (do
-        (set! x (div x 2))
-        (set! y (mul y 2))
-    )))
-    (while (lambda () (do
-        (cond
-            ((equal? 0 x) ())
-            ((equal? 0 (band x 0x1)) (do
-                (update)
-                #t
-            ))
-            (#t (do
-                (set! accum (add accum y))
-                (update)
-            ))
-        )
-    )))
-    accum
-)))
-(define umul (lambda (x y z) (
-    cond
-        ((equal? y 1) x) ;; y could have been -1 on entry to smul
-        ((equal? 0 x) z)
-        ((equal? 0 (band x 0x1)) (umul (div x 2) (add y y) z))
-        (#t (umul (div x 2) (add y y) (add z y)))
-)))
+(define umul (lambda (x y accum)
+    (if
+        (while (lambda ()  ;; <= this is where it's not portable
+            (cond
+                ((equal? 0 x) ())
+                (#t
+                    ((lambda (& _) #t)
+                        (if (band x 1) (set! accum (add accum y)) ())
+                        (set! x (div x 2))
+                        (set! y (mul y 2))
+                    )
+                )
+            )
+        ))
+        accum
+        accum
+    )
+))
 (define smul (lambda (x y) (do
     (define sign 1)
-    (if
-        (lt? x 0)
-        (set! sign (neg sign))
-        ()
-    )
-    (if
-        (lt? y 0)
-        (set! sign (neg sign))
-        ()
-    )
+    (if (lt? x 0) (set! sign (neg sign)) ())
+    (if (lt? y 0) (set! sign (neg sign)) ())
     (cond
         ((equal? x 0) 0)
         ((equal? y 0) 0)
@@ -905,24 +889,6 @@ def boot():
         (#t (copysign (umul (abs x) (abs y) 0) sign))
     )
 )))
-(define exact-smul (lambda (x y) (do
-    (define umul (lambda (x y z) (
-        cond
-            ((equal? y 1) x) ;; y could have been -1 on entry to smul
-            ((equal? 0 x) z)
-            ((equal? 0 (band x 0x1)) (umul (div x 2) (add y y) z))
-            (#t (umul (div x 2) (add y y) (add z y)))
-    )))
-    (cond
-        ((equal? x 0) 0)
-        ((equal? y 0) 0)
-        ((lt? x 0) (neg (smul (neg x) y)))
-        ((equal? x 1) y)
-        ((equal? y 1) x)
-        (#t (copysign (umul x (abs y) 0) y))
-    )
-)))
-
     """,
         leval,
     )
