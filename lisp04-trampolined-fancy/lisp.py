@@ -90,6 +90,8 @@ del T_
 class Symbol:
     ## pylint: disable=too-few-public-methods
 
+    __slots__ = ["s"]
+
     def __init__(self, s):
         assert type(s) is str and s  ## pylint: disable=unidiomatic-typecheck
         self.s = s
@@ -102,6 +104,8 @@ class Symbol:
 
 class SymbolTable:
     ## pylint: disable=too-few-public-methods
+
+    __slots__ = ["t"]
 
     def __init__(self):
         self.t = {}
@@ -125,11 +129,14 @@ def eq(x, y):
 ## {{{ pair
 
 
-class Pair(list):
+class Pair:
     ## pylint: disable=too-few-public-methods
 
+    __slots__ = ["x", "y"]
+
     def __init__(self, x, y):
-        super().__init__((x, y))
+        self.x = x
+        self.y = y
 
 
 def cons(x, y):
@@ -139,35 +146,35 @@ def cons(x, y):
 def car(x):
     if not isinstance(x, Pair):
         raise TypeError(f"expected pair, got {x!r}")
-    return x[0]
+    return x.x
 
 
 def cdr(x):
+    if isinstance(x, Pair):
+        return x.y
     if x is EL:
         return EL
-    if not isinstance(x, Pair):
-        raise TypeError(f"expected () or pair, got {x!r}")
-    return x[1]
+    raise TypeError(f"expected () or pair, got {x!r}")
 
 
 def set_car(x, y):
     if not isinstance(x, Pair):
         raise TypeError(f"expected () or pair, got {x!r}")
-    x[0] = y
+    x.x = y
     return EL
 
 
 def set_cdr(x, y):
     if not isinstance(x, Pair):
         raise TypeError(f"expected () or pair, got {x!r}")
-    x[1] = y
+    x.y = y
     return EL
 
 
 def splitcar(x):
     if not isinstance(x, Pair):
         raise TypeError(f"expected pair, got {x!r}")
-    return x[0], x[1]
+    return x.x, x.y
 
 
 ## }}}
@@ -175,6 +182,8 @@ def splitcar(x):
 
 
 class Stack:
+    __slots__ = ["s"]
+
     def __init__(self):
         self.s = EL
 
@@ -188,8 +197,6 @@ class Stack:
         self.s = cons(thing, self.s)
 
     def pop(self):
-        if self.s is EL:
-            raise ValueError("stack is empty")
         ret, self.s = splitcar(self.s)
         return ret
 
@@ -208,6 +215,8 @@ class Stack:
 
 class Frame:
     ## pylint: disable=too-few-public-methods
+
+    __slots__ = ["x", "c", "e"]
 
     def __init__(self, f, x=None, c=None, e=None):
         self.x = f.x if x is None else x
@@ -235,6 +244,8 @@ stack = FrameStack()
 
 
 class Queue:
+    __slots__ = ["h", "t"]
+
     def __init__(self):
         self.h = self.t = EL
 
@@ -267,6 +278,8 @@ class Queue:
 
 
 class Environment:
+    __slots__ = ["p", "d"]
+
     def __init__(self, params, args, parent):
         self.p = parent
         self.d = {}
@@ -695,10 +708,13 @@ def main(force_repl=False):
 
 
 class Lambda:
-    special = False
+    __slots__ = ["p", "b", "e", "special"]
 
     def __init__(self, params, body, env):
-        self.p, self.b, self.e = params, body, env
+        self.p = params
+        self.b = body
+        self.e = env
+        self.special = False
 
     def __call__(self, frame):
         args = frame.x
@@ -736,6 +752,8 @@ class Lambda:
 
 class Continuation:
     ## pylint: disable=too-few-public-methods
+
+    __slots__ = ["continuation", "stack"]
 
     def __init__(self, continuation):
         self.continuation = continuation  ## a python func
@@ -786,8 +804,10 @@ def stringify_cont(value):
 def stringify_(frame):
     ## pylint: disable=too-many-return-statements,too-many-locals
     x = frame.x
-    if x is EL or x is T:
-        return bounce(frame.c, repr(x))
+    if x is EL:
+        return bounce(frame.c, "()")
+    if x is T:
+        return bounce(frame.c, "#t")
     if isinstance(x, (Symbol, int, float)):
         return bounce(frame.c, str(x))
     if isinstance(x, str):
