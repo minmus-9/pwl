@@ -21,7 +21,7 @@
 TFLAG:=
 
 LISP=./lisp.py
-LIBS=../lisp/stdlib.lisp ../lisp/runtime.lisp ../lisp/cont.lisp
+LIBS=../lisp/lisp01.lisp ../lisp/lisp02.lisp ../lisp/lisp03.lisp
 
 run:
 	$(LISP) $(LIBS) -
