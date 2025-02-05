@@ -39,7 +39,6 @@ class Scanner:
         self.add = self.token.append
         self.pos = 0
         self.state = self.S_SYM
-        self.stack = ""
         self.c_map = {
             "(": self.c_lpar,
             ")": self.c_rpar,
@@ -58,7 +57,6 @@ class Scanner:
         self.state = self.S_CMNT
 
     def c_lpar(self):
-        self.stack += ")"
         self.push(self.T_SYM)
         self.push(self.T_LPAR)
 
@@ -68,11 +66,6 @@ class Scanner:
         self.state = self.S_STR
 
     def c_rpar(self):
-        if not self.stack:
-            raise SyntaxError("too many ')'")
-        c, self.stack = self.stack[-1], self.stack[:-1]
-        if c != ")":
-            raise SyntaxError(f"expected {c!r}, got ')'")
         self.push(self.T_SYM)
         self.push(self.T_RPAR)
 
@@ -110,8 +103,6 @@ class Scanner:
                 self.add(ch)
 
     def eof(self):
-        if self.stack:
-            raise SyntaxError(f"eof in {self.stack[-1]!r}")
         self.push(self.T_SYM)
         self.push(self.T_EOF)
 
