@@ -42,7 +42,7 @@
 (define n2 928375983857632768578325623487965894695739794823743)
 
 (define one (lambda ()
-    (print (smul n1 n2))
+    (smul n1 n2)
 ))
 
 (define two (lambda ()
@@ -90,13 +90,9 @@
 (define four (lambda (n) ( do
     (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2)
     (join (reverse (three n ())) (reverse (three n ())))
-    (print (quote .))
     (join (reverse (three n ())) (reverse (three n ())))
-    (print (quote .))
     (join (reverse (three n ())) (reverse (three n ())))
-    (print (quote .))
     (join (reverse (three n ())) (reverse (three n ())))
-    (print (quote .))
     (join (reverse (three n ())) (reverse (three n ())))
 )))
 

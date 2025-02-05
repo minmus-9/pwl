@@ -715,6 +715,19 @@ def op_sub(args, _):
     return binary(args, lambda x, y: x - y)
 
 
+@glbl("trap")
+def op_trap(args, e):
+    (x,) = unpack(args, 1)
+    ok = T
+    try:
+        res = leval(x, e)
+    except:  ## pylint: disable=bare-except
+        ok = EL
+        t, v = sys.exc_info()[:2]
+        res = f"{t.__name__}: {str(v)}"
+    return cons(ok, cons(res, EL))
+
+
 @glbl("type")
 def op_type(args, _):
     ## pylint: disable=too-many-return-statements
@@ -749,6 +762,71 @@ def op_while(args, e):
     while leval(x, e) is not EL:
         pass
     return EL
+
+
+## }}}
+## {{{ main repl
+
+
+def repl(callback):
+    try:
+        import readline as _  ## pylint: disable=import-outside-toplevel
+    except ImportError:
+        pass
+
+    ## pylint: disable=unused-variable
+    p, rc, stop = Parser(callback), 0, False
+
+    def feed(x):
+        nonlocal p, rc, stop
+        try:
+            p.feed(x)
+        except SystemExit as exc:
+            stop, rc = True, exc.args[0]
+        except:  ## pylint: disable=bare-except
+            p = Parser(callback)
+            traceback.print_exception(*sys.exc_info())
+
+    while not stop:
+        try:
+            line = input("lisp> ") + "\n"
+        except (EOFError, KeyboardInterrupt):
+            feed(None)
+            break
+        feed(line)
+    print("\nbye")
+    return rc
+
+
+def main():
+    try:
+        sys.set_int_max_str_digits(0)
+    except AttributeError:
+        pass
+
+    def callback(sexpr):
+        try:
+            value = leval(sexpr)
+        except SystemExit:
+            raise
+        except:
+            print("Offender (pyth):", sexpr)
+            print("Offender (lisp):", stringify(sexpr), "\n")
+            raise
+        if value is not EL:
+            print(stringify(value))
+
+    stop = True
+    for filename in sys.argv[1:]:
+        if filename == "+":
+            continue
+        if filename == "-":
+            stop = False
+            break
+        load(filename, callback=callback)
+        stop = True
+    if not stop:
+        raise SystemExit(repl(callback))
 
 
 ## }}}
@@ -905,71 +983,6 @@ def boot():
 
 
 boot()
-
-
-## }}}
-## {{{ main repl
-
-
-def repl(callback):
-    try:
-        import readline as _  ## pylint: disable=import-outside-toplevel
-    except ImportError:
-        pass
-
-    ## pylint: disable=unused-variable
-    p, rc, stop = Parser(callback), 0, False
-
-    def feed(x):
-        nonlocal p, rc, stop
-        try:
-            p.feed(x)
-        except SystemExit as exc:
-            stop, rc = True, exc.args[0]
-        except:  ## pylint: disable=bare-except
-            p = Parser(callback)
-            traceback.print_exception(*sys.exc_info())
-
-    while not stop:
-        try:
-            line = input("lisp> ") + "\n"
-        except (EOFError, KeyboardInterrupt):
-            feed(None)
-            break
-        feed(line)
-    print("\nbye")
-    return rc
-
-
-def main():
-    try:
-        sys.set_int_max_str_digits(0)
-    except AttributeError:
-        pass
-
-    def callback(sexpr):
-        try:
-            value = leval(sexpr)
-        except SystemExit:
-            raise
-        except:
-            print("Offender (pyth):", sexpr)
-            print("Offender (lisp):", stringify(sexpr), "\n")
-            raise
-        if value is not EL:
-            print(stringify(value))
-
-    stop = True
-    for filename in sys.argv[1:]:
-        if filename == "+":
-            continue
-        if filename == "-":
-            stop = False
-            break
-        load(filename, callback=callback)
-        stop = True
-    if not stop:
-        raise SystemExit(repl(callback))
 
 
 ## }}}

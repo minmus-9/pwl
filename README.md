@@ -78,8 +78,6 @@ The core language is pretty much complete I think:
 |--------------------------|-------|------------------------------|
 |`()`|easy.py|the empty list aka false|
 |`#t`|easy.py|true singleton|
-|`(>string obj)`|easy.py|convert `obj` to a string|
-|`(>symbol string\|symbol)`|rec.py|convert string to symbol|
 |`(atom? obj)`|easy.py|return true if obj is an atom: `()` `#t` or symbol|
 |`(call/cc (lambda (cc) body))`|cont.py|also `call-with-current-continuation`|
 |`(car list)`|easy.py|head of list|
@@ -100,7 +98,7 @@ The core language is pretty much complete I think:
 |`(sub n1 n2`)|easy.py|`n1 - n2`|
 |`(type obj)`|rec.py|return a symbol representing the type of `obj`|
 
-There are only 4 primitives that won't run with `easy.py` and 3 of these
+There are only 2 primitives that won't run with `easy.py` and one of these
 could be back-ported if desired. The exception is `call/cc` that requires
 at least `cont.py` (see below).
 
@@ -122,11 +120,13 @@ GPL license header):
 |lwp.py   |From scratch redo of pylisp.py                          |2150|1700|45.22| <= wow
 |rec2.py  |Add lwp.py features into rec.py, basically              |1300|1000|12.40|
 |yapl.py  |Yup, another one. Like lwp.py but faster                |1600|1200|24.34|
+|rec3.py  |Recursive lisp with stdlib built in, under 1k LOC       |1000|
 
 The silly benchmark lives in the file `bench.lisp`. FWIW the last 3 are
 slower because (cond) is implemented in terms of (if) and (quasiquote).
 OTOH, rec2.py has (do) aka (begin) and - gasp - (while) implemented as
-primitives which is why it's quicker than the other two.
+primitives which is why it's quicker than the other two. `rec3.py` has
+additional primitives that make it faster still (but still slow :-)
 
 All of the implementations have the following limitations:
 
