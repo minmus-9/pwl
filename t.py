@@ -287,6 +287,10 @@ def set_cdr(x, y):
     x[1] = y
 
 
+def splitcar(x):
+    return listcheck(x)[0], x[1]
+
+
 ## }}}
 ## {{{ environment and globals
 
@@ -298,7 +302,7 @@ class Environment:
         self.t = {}
         variadic = False
         while params is not EL:
-            param, params = car(params), cdr(params)
+            param, params = splitcar(params)
             symcheck(param)
             if eq(param, symbol("&")):
                 variadic = True
@@ -310,7 +314,7 @@ class Environment:
             elif args is EL:
                 raise SyntaxError(f"not enough args {param!s}")
             else:
-                arg, args = car(args), cdr(args)
+                arg, args = splitcar(args)
                 self.t[param] = arg
         if args is not EL:
             raise SyntaxError("too many args")
@@ -418,6 +422,7 @@ class Lambda:
 
 
 def stringify(x):
+    ## pylint: disable=too-many-return-statements
     if x is EL:
         return "()"
     if x is T:
@@ -432,8 +437,8 @@ def stringify(x):
         return "[opaque]"
     parts = []
     while x is not EL:
-        parts.append(stringify(car(x)))
-        x = cdr(x)
+        y, x = splitcar(x)
+        parts.append(stringify(y))
     return "(" + " ".join(parts) + ")"
 
 
@@ -450,9 +455,10 @@ def leval(x, e=SENTINEL):
             raise NameError(x)
         return obj
     if isinstance(x, list):
-        sym, args = car(x), cdr(x)
+        sym, args = splitcar(x)
     elif isinstance(x, Lambda):
-        sym, args = x, EL
+        sym = x
+        args = EL
     else:
         return x
     if isinstance(sym, Symbol):
@@ -472,8 +478,8 @@ def leval(x, e=SENTINEL):
 
     q = Queue()
     while args is not EL:
-        q.enqueue(leval(car(args), e))
-        args = cdr(args)
+        arg, args = splitcar(args)
+        q.enqueue(leval(arg, e))
     return proc(q.head(), e)
 
 
@@ -486,8 +492,8 @@ def unpack(args, n):
     for _ in range(n):
         if args is EL:
             raise TypeError(f"not enough args, need {n}")
-        ret.append(car(args))
-        args = cdr(args)
+        arg, args = splitcar(args)
+        ret.append(arg)
     if args is not EL:
         raise TypeError(f"too many args, need {n}")
     return ret
@@ -500,8 +506,8 @@ def unpack(args, n):
 @spcl("cond")
 def op_cond(args, e):
     while args is not EL:
-        predicate, consequent = unpack(car(args), 2)
-        args = cdr(args)
+        arg, args = splitcar(args)
+        predicate, consequent = unpack(arg, 2)
         if leval(predicate, e) is not EL:
             return leval(consequent, e)
     return EL
@@ -649,8 +655,7 @@ def op_last(args, _):
     (x,) = unpack(args, 1)
     ret = EL
     while x is not EL:
-        ret = car(x)
-        x = cdr(x)
+        ret, x = splitcar(x)
     return ret
 
 
@@ -676,7 +681,7 @@ def op_nand(args, _):
 
 
 @glbl("null?")
-def op_null(args, e):
+def op_null(args, _):
     (x,) = unpack(args, 1)
     return T if x is EL else EL
 
@@ -688,7 +693,7 @@ def op_print(args, _):
         return EL
     end = " "
     while args is not EL:
-        x, args = car(args), cdr(args)
+        x, args = splitcar(args)
         if args is EL:
             end = "\n"
         print(stringify(x), end=end)
@@ -751,6 +756,7 @@ def op_while(args, e):
 
 
 def boot():
+    ## pylint: disable=line-too-long
     parse(
         """
 (define list? (lambda (x) (if (eq? (type x) (quote list)) #t ())))

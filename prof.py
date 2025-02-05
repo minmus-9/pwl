@@ -44,10 +44,12 @@ if 1:
     cProfile.run("""
 from lwp import main
 from yapl import main
+from t import main
 import sys
 sys.argv[1:] = ["lwp.lisp", "sicp.lisp", "t.lisp"]
 sys.argv[1:] = ["lwp.lisp", "sicp.lisp"]
 #sys.argv[1:] = ["z.lisp", "sicp.lisp"]
+sys.argv[1:] = ["bench.lisp"]
 main()
     """, PROFILE)
 

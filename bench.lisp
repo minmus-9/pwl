@@ -64,7 +64,6 @@
         ))
     )
 )))
-(print (e n1 n2))
 
 (define three (lambda (n l) ( do
     (cond
