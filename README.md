@@ -48,7 +48,7 @@ make run    ## run the repl
 The core language is pretty much complete I think:
 
 |Special Form|Description (see the source)|
-|--------------------------|-------|-----------------------------|
+|--------------------------|-----------------------------|
 |`(cond ((p c) ...)`|return `(eval c)` for the `(eval p)` that returns true|
 |`(define sym body)`|bind `body` to `sym` in the current environment|
 |`(lambda args body)`|create a function|
@@ -58,7 +58,7 @@ The core language is pretty much complete I think:
 |`(trap obj)`|returns a list containing a success-flag and a result or error message|
 
 |Primitive|Description (see the source)|
-|--------------------------|-------|------------------------------|
+|--------------------------|------------------------------|
 |`()`|the empty list aka false|
 |`#t`|true singleton|
 |`(atom? obj)`|return true if obj is an atom: `()` `#t` or symbol|
