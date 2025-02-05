@@ -17,7 +17,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"easy.py - a recursive lisp in 500 lines"
+"lisp.py - an easy recursive lisp in 500 lines"
 
 ## pylint: disable=invalid-name
 ## XXX pylint: disable=missing-docstring

@@ -18,7 +18,8 @@
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-cont.py - lisp with continuations and "heap-based" recursion, builds on rec.py
+lisp.py - lisp with continuations and "heap-based" recursion, builds on
+lisp02/lisp.py
 """
 
 ## pylint: disable=invalid-name,unbalanced-tuple-unpacking

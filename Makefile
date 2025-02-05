@@ -27,6 +27,6 @@ sicp:
 	@for d in lisp*/; do (cd $$d && $(MAKE) $@); done
 
 clean:
-	find . -type d -name __pycache__ -delete
+	find . -type d -name __pycache__ -print0 | xargs -0 -n 25 rm -rf || true
 
 ## EOF

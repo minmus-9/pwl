@@ -17,7 +17,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"rec.py - a recursive lisp that fixes easy.py's cdr problem."
+"lisp.py - a recursive lisp that fixes lisp01/lisp.py's cdr problem."
 
 ## pylint: disable=invalid-name,unbalanced-tuple-unpacking
 ## XXX pylint: disable=missing-docstring
