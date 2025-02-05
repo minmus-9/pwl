@@ -334,6 +334,8 @@ T = True
 class Symbol:
     ## pylint: disable=too-few-public-methods
 
+    __slots__ = ["s"]
+
     def __init__(self, s):
         assert type(s) is str and s  ## pylint: disable=unidiomatic-typecheck
         self.s = s
@@ -404,6 +406,8 @@ def splitcar(x):
 
 
 class Environment:
+    __slots__ = ["p", "t"]
+
     def __init__(self, params, args, parent):
         self.p = parent
         assert isinstance(parent, Environment) or parent is SENTINEL
@@ -489,6 +493,8 @@ def spcl(name):
 
 
 class Queue:
+    __slots__ = ["h", "t"]
+
     def __init__(self):
         self.h = self.t = EL
 
@@ -520,10 +526,11 @@ class Queue:
 class Lambda:
     ## pylint: disable=too-few-public-methods
 
-    special = False
+    __slots__ = ["p", "b", "e", "special"]
 
     def __init__(self, params, body, env):
         self.p, self.b, self.e = params, body, env
+        self.special = False
 
     def __call__(self, args, e):
         p = e if self.special else self.e
