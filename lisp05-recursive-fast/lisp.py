@@ -17,9 +17,9 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"lisp.py -- a fast recursive lisp with stdlib in ~1k lines"
+"lisp.py -- a fast recursive lisp with stdlib in <1k lines"
 
-## pylint: disable=invalid-name,unbalanced-tuple-unpacking,too-many-lines
+## pylint: disable=invalid-name,unbalanced-tuple-unpacking
 ## XXX pylint: disable=missing-docstring
 
 import locale
@@ -807,11 +807,6 @@ def repl(callback):
 
 
 def main():
-    try:
-        sys.set_int_max_str_digits(0)
-    except AttributeError:
-        pass
-
     def callback(sexpr):
         try:
             value = leval(sexpr)
@@ -826,8 +821,6 @@ def main():
 
     stop = True
     for filename in sys.argv[1:]:
-        if filename == "+":
-            continue
         if filename == "-":
             stop = False
             break

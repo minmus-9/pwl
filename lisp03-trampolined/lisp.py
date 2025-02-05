@@ -945,12 +945,6 @@ def main():
 
     loaded = False
     for filename in sys.argv[1:]:
-        if filename == "+":
-            try:
-                sys.set_int_max_str_digits(0)
-            except AttributeError:
-                pass
-            continue
         if filename == "-":
             loaded = False
             break

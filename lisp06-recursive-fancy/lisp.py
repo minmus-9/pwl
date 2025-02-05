@@ -1060,11 +1060,6 @@ def repl(callback):
 
 
 def main():
-    try:
-        sys.set_int_max_str_digits(0)
-    except AttributeError:
-        pass
-
     def callback(sexpr):
         try:
             value = leval(sexpr)
@@ -1079,8 +1074,6 @@ def main():
 
     stop = True
     for filename in sys.argv[1:]:
-        if filename == "+":
-            continue
         if filename == "-":
             stop = False
             break

@@ -31,38 +31,11 @@ transformations) which makes it even more fun to mess with.
 Running the code is pretty much the same regardless of which implementation
 you want to run:
 ```
-./easy.py     stdlib.lisp -
-./rec.py      stdlib.lisp runtime.lisp -
-./cont.py   + stdlib.lisp runtime.lisp cont.lisp -
-./lisp.py   + stdlib.lisp runtime.lisp cont.lisp lisp.lisp -
-./oo.py     + stdlib.lisp runtime.lisp cont.lisp lisp.lisp -
-./pylisp.py + stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp -
-./pwl.py    + -
-./lwp.py    + lwp.lisp -
-./rec2.py   + rec2.lisp -
-./yapl.py   + lwp.lisp -
-./rec3.py   + -
+cd lisp*/
+make sicp   ## run some sicp code for sanity checking
+make bench  ## run bench.lisp
+make run    ## run the repl
 ```
-will run `easy.py`, execute `stdlib.lisp`, and the '-' will pop you into the
-repl. If you omit the '-', the other files will be executed and the program
-will exit. The files `cont.py` and up (see "The Implementations" below)
-support an additional pseudo-file '+' that causes 
-```
-sys.set_int_max_str_digits(0)
-```
-to be called if possible. This allows printing of large numbers (over 4300
-decimal digits).
-
-If you want to exercise everything, try
-```
-./pwl.py + sicp.lisp bench.lisp
-```
-or
-```
-make && ./pwl.py + sicp.lisp bench.lisp
-```
-The file `pwl.py` includes all the standard lisp files described below. Saves
-some typing. Don't forget to run `make` the first time you run `pwl.py`!
 
 ---
 ## The Language
