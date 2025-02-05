@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
-"yapl.py -- next gen :-)"
+"""
+fancy.py -- this is the reference for fully trampolined lisp with FFI and
+quasiquote.
+"""
 
 ## pylint: disable=invalid-name,too-many-lines,unbalanced-tuple-unpacking
 ## XXX pylint: disable=missing-docstring

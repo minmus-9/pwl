@@ -1140,7 +1140,7 @@ def op_while(args, e):
 
 
 ## }}}
-## {{{ ffi
+## {{{ ffi ops
 
 
 def module_ffi(module, attr, args):

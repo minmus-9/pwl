@@ -18,22 +18,15 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-LIB_SRCS=stdlib.lisp runtime.lisp cont.lisp lisp.lisp pylisp.lisp
+all:
 
-all:	pwl.py
+bench:
+	@for d in lisp*/; do (cd $$d && $(MAKE) $@); done
 
-pwl.py:	pwl.py.in pylisp.py oo.py lib.lisp
-	cat pwl.py.in | sed -e '/@preload_src@/r lib.lisp' > $@
-	chmod 755 $@
-	
-lib.lisp:	$(LIB_SRCS)
-	cat $(LIB_SRCS) > $@
+sicp:
+	@for d in lisp*/; do (cd $$d && $(MAKE) $@); done
 
 clean:
-	rm -rf __pycache__
-	rm -f lib.lisp
-
-distclean:	clean
-	rm -f pwl.py
+	find . -type d -name __pycache__ -delete
 
 ## EOF

@@ -98,6 +98,6 @@
 
 (define five (lambda () (four 80)))
 
-(five)
+((lambda () (do (five) ())))
 
 ;; EOF
