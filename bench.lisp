@@ -18,7 +18,7 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;; signed integer multiplication from subtraction and right shift (division)
-(define smul (lambda (x y) (do
+(define smul-ref (lambda (x y) (do
     (define umul (lambda (x y z) (
         cond
             ((equal? y 1) x) ;; y could have been -1 on entry to smul
@@ -36,20 +36,35 @@
     )
 )))
 
+;(define smul smul-ref)  ;; comment this for custom
+
+(define n1 9283745983845763247685783256234879658946957397948234)
+(define n2 928375983857632768578325623487965894695739794823743)
+
 (define one (lambda ()
-    (smul
-        92837459838576324768578325623487965894695739794823743
-        92837459838576324768578325623487965894695739794823743
-    )
+    (print (smul n1 n2))
 ))
 
 (define two (lambda ()
     (let
         ((x (one))
-         (y (one)))
+         (y (one))
+         (z (e n1 n2)))
         x
     )
 ))
+
+(define e (lambda (x y) (do  ;; gcd
+    (cond
+        ((equal? y 0) x)
+        ((equal? x 0) 1)
+        (#t (do
+            (define r (mod x y))
+            (e y r)
+        ))
+    )
+)))
+(print (e n1 n2))
 
 (define three (lambda (n l) ( do
     (cond
@@ -61,12 +76,29 @@
 )))
 
 
+(define pie (lambda (n) (do
+    (cond
+        ((lt? n 1) ())
+        (#t (do
+            (e n1 n2)
+            (two)
+            (pie (sub n 1))
+        ))
+    )
+)))
+
+
 (define four (lambda (n) ( do
-    (two) (two) (two) (two) (two) (two) (two) (two) 
-    (reverse (three n ()))
-    (reverse (three n ()))
-    (reverse (three n ()))
-    (reverse (three n ()))
+    (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2) (pie 2)
+    (join (reverse (three n ())) (reverse (three n ())))
+    (print (quote .))
+    (join (reverse (three n ())) (reverse (three n ())))
+    (print (quote .))
+    (join (reverse (three n ())) (reverse (three n ())))
+    (print (quote .))
+    (join (reverse (three n ())) (reverse (three n ())))
+    (print (quote .))
+    (join (reverse (three n ())) (reverse (three n ())))
 )))
 
 (define five (lambda () (four 100)))

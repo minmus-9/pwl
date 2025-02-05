@@ -877,7 +877,7 @@ def boot():
                 )
             )
         ))
-        accum
+        ()
         accum
     )
 ))

@@ -22,7 +22,7 @@
 (define add2    (lambda (x y) (sub x (neg y))))
 
 ;; oh, and mod
-(define mod     (lambda (n d) (sub n (mul2 d (div n d)))))
+(define mod     (lambda (n d) (sub n (mul d (div n d)))))
 
 (define add (lambda (x & args)
     (if
