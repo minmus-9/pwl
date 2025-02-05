@@ -25,6 +25,11 @@ fun to play with at a minimum. I've been able to run nontrivial code
 from google, SICP, and other places with this thing (after obvious
 transformations) which makes it even more fun to mess with.
 
+The lisps included here are "complete" in the sense that you should be
+able to bootstrap an entire lisp environment using only what is provided.
+You'll need to add I/O, etc if you want that stuff. This code is really
+easy to hack on, though.
+
 ---
 ## TL;DR Running the code
 
@@ -42,43 +47,39 @@ make run    ## run the repl
 
 The core language is pretty much complete I think:
 
-|Special Form|Introduced|Description (see the source)|
+|Special Form|Description (see the source)|
 |--------------------------|-------|-----------------------------|
-|`(cond ((p c) ...)`|easy.py|return `(eval c)` for the `(eval p)` that returns true|
-|`(define sym body)`|easy.py|bind `body` to `sym` in the current environment|
-|`(lambda args body)`|easy.py|create a function|
-|`(quote obj)`|easy.py|returns obj unevaluated|
-|`(set! sym value)`|easy.py|redefine the innermost definition of `sym`|
-|`(special sym proc)`|easy.py|define a special form|
-|`(trap obj)`|rec.py|returns a list containing a success-flag and a result or error message|
+|`(cond ((p c) ...)`|return `(eval c)` for the `(eval p)` that returns true|
+|`(define sym body)`|bind `body` to `sym` in the current environment|
+|`(lambda args body)`|create a function|
+|`(quote obj)`|returns obj unevaluated|
+|`(set! sym value)`|redefine the innermost definition of `sym`|
+|`(special sym proc)`|define a special form|
+|`(trap obj)`|returns a list containing a success-flag and a result or error message|
 
-|Primitive|Introduced|Description (see the source)|
+|Primitive|Description (see the source)|
 |--------------------------|-------|------------------------------|
-|`()`|easy.py|the empty list aka false|
-|`#t`|easy.py|true singleton|
-|`(atom? obj)`|easy.py|return true if obj is an atom: `()` `#t` or symbol|
-|`(call/cc (lambda (cc) body))`|cont.py|also `call-with-current-continuation`|
-|`(car list)`|easy.py|head of list|
-|`(cdr list)`|easy.py|tail of list|
-|`(cons obj list)`|easy.py|prepend `obj` to list|
-|`(div n1 n2)`|easy.py|`n1 / n2`|
-|`(eq? x y)`|easy.py|return true if 2 atoms are the same|
-|`(equal? n1 n2)`|easy.py|return true if 2 numbers are equal|
-|`(error obj)`|easy.py|raise `list.error` with `obj`|
-|`(eval obj)`|easy.py|evaluate `obj`|
-|`(exit obj)`|easy.py|raise `SystemExit` with the given `obj`|
-|`(lt? n1 n2)`|easy.py|return true if `n1 < n2`|
-|`(mul n1 n2)`|easy.py|return `n1 * n2`|
-|`(nand n1 n2)`|easy.py|return `~(n1 & n2)`|
-|`(print ...)`|easy.py|print a list of objects space-separated followed by a newline|
-|`(set-car! list value)`|easy.py|set the head of a list|
-|`(set-cdr! list list`)|easy.py|set the tail of a list to another list|
-|`(sub n1 n2`)|easy.py|`n1 - n2`|
-|`(type obj)`|rec.py|return a symbol representing the type of `obj`|
-
-There are only 2 primitives that won't run with `easy.py` and one of these
-could be back-ported if desired. The exception is `call/cc` that requires
-at least `cont.py` (see below).
+|`()`|the empty list aka false|
+|`#t`|true singleton|
+|`(atom? obj)`|return true if obj is an atom: `()` `#t` or symbol|
+|`(call/cc (lambda (cc) body))`|also `call-with-current-continuation`|
+|`(car list)`|head of list|
+|`(cdr list)`|tail of list|
+|`(cons obj list)`|prepend `obj` to list|
+|`(div n1 n2)`|`n1 / n2`|
+|`(eq? x y)`|return true if 2 atoms are the same|
+|`(equal? n1 n2)`|return true if 2 numbers are equal|
+|`(error obj)`|raise `list.error` with `obj`|
+|`(eval obj)`|evaluate `obj`|
+|`(exit obj)`|raise `SystemExit` with the given `obj`|
+|`(lt? n1 n2)`|return true if `n1 < n2`|
+|`(mul n1 n2)`|return `n1 * n2`|
+|`(nand n1 n2)`|return `~(n1 & n2)`|
+|`(print ...)`|print a list of objects space-separated followed by a newline|
+|`(set-car! list value)`|set the head of a list|
+|`(set-cdr! list list`)|set the tail of a list to another list|
+|`(sub n1 n2`)|`n1 - n2`|
+|`(type obj)`|return a symbol representing the type of `obj`|
 
 Some of the implementations support additional special forms and/or primitives.
 See the source for details.
@@ -91,30 +92,22 @@ GPL license header):
 
 |File|Description|Lines|SLOC|Benchmark Time|
 |---------|--------------------------------------------------------|----|----|-----|
-|easy.py  |Pure-recursive implementation with a problem            | 500| 400|3.054|
-|rec.py   |Fixes easy.py's problem, but still has limited recursion| 650| 500|5.520|
-|cont.py  |Features "heap-based" recursion and continuations       |1000| 700|15.27|
-|lisp.py  |Add FFI, API, quasiquote and friends                    |1500|1100|14.98|
-|oo.py    |OO version of lisp.py                                   |1550|1150|14.43|
-|pylisp.py|Add an FFI-based runtime to oo.py using its API         | 250| 200|14.54|
-|pwl.py   |Inline all the stdlibs, call pylisp.py                  |1100| 800|14.47|
-|lwp.py   |From scratch redo of pylisp.py                          |2150|1700|65.25| <= s.l.o.w. wow
-|rec2.py  |Add lwp.py features into rec.py, basically              |1300|1000|crash|
-|yapl.py  |Yup, another one. Like lwp.py but faster                |1600|1200|34.29|
-|rec3.py  |Recursive lisp with stdlib built in, under 1k LOC       |1000| 800|0.864| <= fastest
+|lisp01-easy |Pure-recursive implementation with a problem                      | 550| 400|3.10|
+|lisp02-recursive |Fixes easy.py's problem, but still has limited recursion     | 650| 500|5.46|
+|lisp03-trampolined  |Features "heap-based" recursion and continuations         |1000| 700|15.5|
+|lisp04-trampolined-fancy |Add FFI, API, quasiquote and friends                 |1650|1100|34.9|
+|lisp05-recursive-fast |Recursive lisp with stdlib built in, under 1k LOC       |1000| 800|0.84|
+|lisp06-recursive-fancy |Recursive lisp with stdlib built in, FFI, quasiquote   |1250| 800|0.86|
 
-The silly benchmark lives in the file `bench.lisp`. FWIW the last 3 are
-slower because (cond) is implemented in terms of (if) and (quasiquote).
-OTOH, rec2.py has (do) aka (begin) and - gasp - (while) implemented as
-primitives which is why it's quicker than the other two. `rec3.py` has
-additional primitives that make it faster still (but still slow :-)
+The silly benchmark lives in the file `bench.lisp`. FWIW the trampolined
+ones are slower partly because (cond) is implemented in terms of (if) and
+(quasiquote). lisp05 and lisp06 implement additional primitives and special
+forms which is why they're so much faster.
 
 All of the implementations have the following limitations:
 
-- Creation of reference loops will cause infinite loops in various code
 - No tail-call optimization
 - Syntax and other errors do not include lisp source line numbers
-- No macros (because I don't know anything about lisp macros yet)
 - The python garbage collector is the lisp GC
 
 All of them also share:
@@ -134,24 +127,11 @@ These files all use globals and pure python functions; there are only a few
 classes used in the code. This was done on purpose (a) to facilitate a future
 C port, and (b) to keep things simple and focused. It would be worthwhile to
 do an OO version so that you could have multiple lisp interpreters; this would
-allow its use in hybrid python code libraries, for example. I've done a rough
-version in the file `oo.py`. To use it,
-```
-from oo import Lisp, lisp
-
-## lisp is a global Lisp instance and smells like what's in lisp.py.
-print(lisp.execute("(add 1 2)"))
-
-## or make your own
-class MyLisp(Lisp):
-    ...
-
-lisp = MyLisp()
-print(lisp.execute("(add 1 2)"))
-```
+allow its use in hybrid python code libraries, for example. If such a thing
+is even interesting :-)
 
 ---
-### easy.py
+### `lisp01-easy`
 
 This is the first in the series. In all of the implementations, the python
 function `leval()` takes an sexpr and evaluates it. The source scanner and
@@ -172,14 +152,14 @@ define your own (unhygeinic) special forms in this lisp using
 `(special sym lambda)`. That's it. That's really all there is to it. Don't
 overthink it.
 
-I'm sure that "(special)" has an official name. Also, my lisp code
-formatting is, uh, nonstandard, I think: it looks a lot like Python. I
-plead ignorance on both counts. I'll fix stuff like this as I learn. Except
-maybe the code formatting :-) Glad to be having fun for the time being.
+I'm sure that "(special)" has an official name, possibly "(dynamic)". Also,
+my lisp code formatting is, uh, nonstandard, I think: it looks a lot like
+Python. I plead ignorance on both counts. I'll fix stuff like this as I
+learn. Except maybe the code formatting :-) Glad to be having fun for the
+time being.
 
-In the case of `easy.py`, `leval()` calls itself recursively to evaluate
-each sexpr. The `rec.py` version does the same. The `easy.py` code is
-hopefully mostly self-evident -- readability was a priority.
+In the case of `lisp01-easy`, `leval()` calls itself recursively to evaluate
+each sexpr.
 
 This code implements lisp lists as python lists and follows the general
 arc of Norvig's lis.py (bloated 4X by yours truly). But there's a
@@ -198,19 +178,18 @@ problem. `set-cdr!` is implemented as something like
 (set-cdr! lst lst2) => lst[1:] = lst2
 ```
 If I later modify `lst2`, I expect that `lst` will reflect this change. For
-`easy.py` it does not.
+`lisp01-easy` it does not.
 
-OTOH `easy.py` is simple and definitely illustrates the core concepts. If
-you are coming in at the ground floor like me, you'll definitely want to
+OTOH `lisp01-easy` is simple and definitely illustrates the core concepts.
+If you are coming in at the ground floor like me, you'll definitely want to
 look at this file first. I'll need it in 6 months. Also, it can execute
-everything in `stdlib.lisp` and all the stuff currently in `sicp.lisp`. In
-fact, all of the lisps in this repo speak the exact same core language.
+everything in `lisp01.lisp` and all the stuff currently in `sicp.lisp`.
 
 ---
-### rec.py
+### `lisp02-recursive`
 
-This file builds on `easy.py` and fixes its cdr-problem by switching to a
-different list representation. Specifically,
+This file builds on `lisp01-easy` and fixes its cdr-problem by switching to
+a different list representation. Specifically,
 ```
 (1 2 3) => [1, [2, [3, EL]]]
 ```
@@ -225,24 +204,11 @@ obvious `set-car!` and `set-cdr!` definitions. The catch is that dealing
 with lists from Python code is now more painful since you have to use the
 `car()`, `cdr()`, `cons()`, etc. functions to process lists from Python.
 
-You should look through this code after `easy.py` and make sure it makes
-sense to you. Looking at the diffs as a guide may be a good way to go. I
-added a few primitive ops here as well:
-- (type obj)
-- (trap code)
-- (>symbol string)
-
-We've taken the basic recusive approach about as far as it can go. Using the
-definition of `factorial1` in the lisp source file `sicp.lisp`, I can compute
-up to `(factorial1 88)` before blowing out the python stack. This is
-unacceptable to me because it doesn't even fill a terminal line :-)
-
-I want to see `(factorial1 10000)` as a minimum plausible time/space limit.
-
-See below for some additional thoughts on `rec.py`.
+You should look through this code after `lisp01-easy` and make sure it makes
+sense to you. Looking at the diffs as a guide may be a good way to go.
 
 ---
-### trampoline.py
+### `trampoline.py`
 
 This isn't a lisp at all but is worthy of serious study if you aren't familiar
 with trampolines and CPS (I had never heard of them before this project).
@@ -254,13 +220,14 @@ In order to beat the recursion limit we have to
 
 The file `trampoline.py` uses the usual factorial example to illustrate the
 solution to these problems via trampolines and continuation-passing style.
-In order to understand `cont.py`, you need to understand this one. Once you
-understand this one, `cont.py` will be straightforward. There are a couple of
-good things in the References section at the end. I had to stare at them,
-write this code, and stare some more before it all really clicked.
+In order to understand `lisp03-trampolined`, you need to understand this
+one. Once you understand this one, `lisp03-trampolined` will be
+straightforward. There are a couple of good things in the References section
+at the end. I had to stare at them, write this code, and stare some more
+before it all really clicked.
 
 ---
-### cont.py
+### `lisp03-trampolined`
 
 This is the final major lisp implementation in the set. It is
 "feature-complete" to me in the sense that it scratches all of the itches I
@@ -283,155 +250,27 @@ how to implement them! I fear that this will be a Big Change to the code, but
 I'm not 100% on that.
 
 ---
-### lisp.py
+### `lisp04-trampolined-fancy`
 
-This file includes some additions to cont.py:
+This file includes some additions to `lisp03-trampolined`:
 - An "FFI" (foreign function) interface for lisp<->python interaction that
   lets lisp talk to python in a pythonic way (pronounced "without having to
-  deal with the lisp representation of lists I chose"). The files `pylisp.py`
-  and `pylisp.lisp` (see below) show how to use the FFI api.
-- A "lisp" class that houses a public api. Everything is a staticmethod,
-  but the door is open for the proper class `Lisp` in `oo.py`.
+  deal with the lisp representation of lists I chose").
 - Support for using tick (') to quote objects. Also quasiquote, unquote,
   and unquote-splicing have the usual ` , ,@ syntactic sugar.
 
-This api class cannot be instantiated; it's just a namespace to hold a bunch
-of useful symbols. See `oo.py` below.
+---
+### `lisp05-recursive-fast`
+
+This is a self-contained recursive lisp with stdlib in <1k lines. It adds the
+(if) special form and a few primitives to gain speed. In particular, it adds
+the abomination (while). Awful, but it's really handy for getting a recursive
+implementation to be able to do anything meaningful.
 
 ---
-### oo.py
+### `lisp06-recursive-fancy`
 
-This module exports a `Lisp` class and a global instance of it, `lisp`. Things
-should hopefully continue to work as-is. If you want to play with a "vanilla"
-lisp, this module is probably the one to try; if you want something more
-complete (with string methods in particular), try `pylisp.py` or `pwl.py`.
-
----
-### pylisp.py
-
-This file extends oo.py by adding a bunch of ffi-based runtime in pylisp.py
-and pylisp.lisp. some list methods, math module, random module, some string
-methods, and the time module so far.
-
-`pylisp.py` doesn't have all the lisp innards in it; instead, it just imports
-`oo.py` to do all the work. I figured that `oo.py` is about as far as I
-wanted to go (hopefully) without becoming too application-specific. Adding a
-bunch of stuff to the FFI namespace and polluting the global namespace with
-wrappers is what happens in `pylisp.{py,lisp}`.
-
-A note on `rec.py`: everything added in `oo.py` and `pylisp.py` could be
-trivially back-ported to `rec.py` if you wanted a pure-recursive implementation
-with extra python integration. I considered `rec.py` done so I didn't backport
-anything. Plus I wanted to see the cost of changing the lisp list
-representation. One reason to keep `rec.py` is speed. This code is slow as it
-is, but the trampolined code tends to be a lot slower -- unless continuations
-are used, apparently (I was surprised by this: it's only sometimes true but is
-markedly faster when it is true).
-
----
-### pwl.py
-
-This file inlines the lisp libraries `stdlib.lisp`, `runtime.lisp`,
-`cont.lisp`, and `pylisp.lisp`. Note that it requires the files `pylisp.py`
-and `lisp.py` in order to run. Just saves some typing. Don't forget to run
-`make` if you change any of the lisp libs (see below).
-
----
-### lwp.py
-
-This is a rewrite of pylisp.py/pwl.py that allows experimentation with
-different object representations. As such, it is the slowest implementation
-by far.
-
----
-
-### rec2.py
-
-This is a recursive one that implements some of lwp.py's features. It passes
-sicp.lisp but crashes on the benchmark.
-
----
-
-### yapl.py
-
-And another one, in case you need it. It's similar to lwp.py in terms of
-capabilities but roughly twice as fast. This is the reference implementation
-for CPS and trampolining a full runtime including quasiquote.
-
----
-
-### rec3.py
-
-This is the recommended recursive implementation to use. It has been optimized
-a bit and is the fastest one in the bunch.
-
----
-## Included lisp files
-
-|File|Description|
-|------------|--------------------------------------------------|
-|stdlib.lisp | Standard library for all of the lisps |
-|sicp.lisp   | Some code from SICP (see sicp.pdf reference below) that only uses stdlib.lisp |
-|runtime.lisp| Stuff for everything but easy.py |
-|cont.lisp   | Stuff that uses continuations (lisp.py and up) |
-|lisp.lisp   | Stuff that uses quasiquote |
-|pylisp.lisp | Additional FFI runtime support for pylisp.py and up |
-|lwp.lisp    | Full runtime for lwp.py and yapl.py |
-|rec2.lisp   | Full runtime for rec2.py |
-
-### `stdlib.lisp`
-
-The Python core doesn't implement (add) or (mod). For bitwise ops, it only
-implements `(nand)`. The first order of business is to define these.
-Following are a bunch of useful ops, some of which came from BYOL, some
-from SICP, and some from me ((add), (or), (let), etc). This was enough
-to get me started on SICP, which was both interesting and useful (it
-provided my reference code and output).
-
-### `sicp.lisp`
-
-This is some code from the early parts of SICP (before anything mutable, so
-it all runs with `easy.py`). See the sicp.pdf reference at the end of this
-file.
-
-### `runtime.lisp`
-
-Just `(list-builder)` and a couple of pythonic things. This doesn't work
-with `easy.py`, due to the use of `(set-cdr!)` but it does work with
-`rec.py` and above.
-
-I didn't add the backquote etc. quasiquoting sugar to `rec.py` which is
-why the stdlibs use `(quote)` all over the place. So you'll see a bunch of
-```
-(fred (quote doit) ...)
-```
-instead of the easier-to-read tick syntax.
-
-### `cont.lisp`
-
-This file requires `cont.py` or higher because it includes things that are
-implemented using continuations. Abominations like looping. Which are
-important when you don't have tail call optimizations.
-
-### `lisp.lisp`
-
-The code in here uses quasiquote (only implemented in lisp.py and up) or
-provides other useful runtime services.
-
-### `pylisp.lisp`
-
-This file requires `lisp.py` and `pylisp.py` and consists of a bunch of
-FFI interface wrappers whose Python implementations live in `pylisp.py`.
-`lisp.py` provides the FFI interface itself which is why it is needed.
-
-### `lwp.lisp`
-
-This is the full runtime for lwp.py and yapl.py. Nonrecursive and slow!
-
-### `rec2.lisp`
-
-This is the runtime for rec2.py and is heavily based on the abomination
-(while).
+This is `lisp05-recursive-fast` with FFI and quasiquote thrown in.
 
 ---
 ## Notes on the representation of ()...
@@ -488,6 +327,9 @@ This code is released under the GPLv3:
 > along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 The file LICENSE contains a copy of the full GPL text.
+
+Hopefully enshittifying every file with a license banner will ward off
+the AI training bots?
 
 ---
 ## TODOs
