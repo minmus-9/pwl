@@ -308,7 +308,7 @@ class Environment:
                 self.t[param] = args
                 return
             elif args is EL:
-                raise SyntaxError("not enough args")
+                raise SyntaxError(f"not enough args {param!s}")
             else:
                 arg, args = car(args), cdr(args)
                 self.t[param] = arg
@@ -466,6 +466,9 @@ def leval(x, e=SENTINEL):
         raise TypeError(f"expected proc/list, got {sym!r}")
     else:
         proc = leval(sym, e)
+        assert proc is not True
+    if not callable(proc):
+        raise TypeError(f"expected proc, got {proc!r}")
 
     q = Queue()
     while args is not EL:
@@ -494,12 +497,6 @@ def unpack(args, n):
 ## {{{ special forms
 
 
-@spcl("define")
-def op_define(args, e):
-    name, value = unpack(args, 2)
-    return e.set(symcheck(name), leval(value, e))
-
-
 @spcl("cond")
 def op_cond(args, e):
     while args is not EL:
@@ -508,6 +505,18 @@ def op_cond(args, e):
         if leval(predicate, e) is not EL:
             return leval(consequent, e)
     return EL
+
+
+@spcl("define")
+def op_define(args, e):
+    name, value = unpack(args, 2)
+    return e.set(symcheck(name), leval(value, e))
+
+
+@spcl("if")
+def op_if(args, e):
+    p, c, a = unpack(args, 3)
+    return leval(a, e) if leval(p, e) is EL else leval(c, e)
 
 
 @spcl("lambda")
@@ -635,6 +644,16 @@ def op_exit(args, _):
     raise SystemExit(stringify(x))
 
 
+@glbl("last")
+def op_last(args, _):
+    (x,) = unpack(args, 1)
+    ret = EL
+    while x is not EL:
+        ret = car(x)
+        x = cdr(x)
+    return ret
+
+
 @glbl("lt?")
 def op_lt(args, _):
     def f(x, y):
@@ -654,6 +673,12 @@ def op_nand(args, _):
         return ~(x & y)
 
     return binary(args, f)
+
+
+@glbl("null?")
+def op_null(args, e):
+    (x,) = unpack(args, 1)
+    return T if x is EL else EL
 
 
 @glbl("print")
@@ -728,7 +753,6 @@ def op_while(args, e):
 def boot():
     parse(
         """
-(define null? (lambda (x) (if x () #t)))
 (define list? (lambda (x) (if (eq? (type x) (quote list)) #t ())))
 (define pair? list?)
 (define list (lambda (& args) args))
@@ -737,18 +761,12 @@ def boot():
 (define cadddr (lambda (l) (car (cdr (cdr (cdr l))))))
 (define caddddr (lambda (l) (car (cdr (cdr (cdr (cdr l)))))))
 (define cadddddr (lambda (l) (car (cdr (cdr (cdr (cdr (cdr l))))))))
-(special if (lambda (__special_if_p__ __special_if_c__ __special_if_a__)
-    (cond
-        ((eval __special_if_p__ 1) (eval __special_if_c__ 1))
-        (#t (eval __special_if_a__ 1))
-    )
-))
 (define foreach (lambda (f l)
     (while (lambda ()
         (if
             (null? l)
             ()
-            ((lambda (x y z) z)
+            ((lambda (x y z) z)  ;; (do) without (if) since args eval l->r
                 (f (car l))
                 (set! l (cdr l))
                 #t
@@ -756,84 +774,30 @@ def boot():
         )
     ))
 ))
-(define last (lambda (l)
-    (if
-        (null? l)
-        (error "list is empty")
-        ((lambda (x y z) z)
-            (define r ())
-            (while (lambda ()
-                (if
-                    (null? l)
-                    ()
-                    ((lambda (x y z) z)
-                        (set! r (car l))
-                        (set! l (cdr l))
-                        #t
-                    )
-                )
-            ))
-            r
-        )
-    )
-))
 (define do (lambda (& args) (last args)))
-
+(define reverse (lambda (l) (do
+    (define r ())
+    (while (lambda ()
+        (if
+            (null? l)
+            ()
+            (do
+                (set! r (cons (car l) r))
+                (set! l (cdr l))
+                #t
+            )
+        )
+    ))
+    r
+)))
 (special and (lambda (__special_and2_x__ __special_and2_y__)
     (if (eval __special_and2_x__ 1) (eval __special_and2_y__ 1) ())
 ))
 (special or (lambda (__special_or2_x__ __special_or2_y__)
     (if (eval __special_or2_x__ 1) #t (eval __special_or2_y__ 1))
 ))
-(define builder (lambda () (do
-    (define h ())
-    (define t ())
-    (lambda (x) (do
-        (define n (list x))
-        (if
-            (null? h)
-            (set! h n)
-            (set-cdr! t n)
-        )
-        (set! t n)
-        h
-    ))
-)))
-(define join (lambda (x y)  ;; yuck. but nonrecursive :-/
-    (cond
-        ((null? x) y)
-        ((null? y) x)
-        (#t (do
-            (define h ())
-            (define t ())
-            (define f (lambda ()
-                (if
-                    (null? x)
-                    ()
-                    (do
-                        (define n (list (car x)))
-                        (if
-                            (null? h)
-                            (set! h n)
-                            (set-cdr! t n)
-                        )
-                        (set! t n)
-                        (set! x (cdr x))
-                        #t
-                    )
-                )
-            ))
-            (while f) (set! x y) (while f)
-            h
-        ))
-    )
-))
 (define join (lambda (x y)
-    (if 
-        (null? x)
-        y
-        (cons (car x) (join (cdr x) y))
-    )
+    (if (null? x) y (cons (car x) (join (cdr x) y)))
 ))
 ;;; definition of let sicp p.87
 (special let (lambda (__special_let_vars__ __special_let_body__) (do
@@ -867,7 +831,21 @@ def boot():
     )))
     (__special_let_decls__)
 )))
-
+(define length (lambda (l) (do
+    (define n 0)
+    (while (lambda ()
+        (if
+            (null? l)
+            ()
+            (do
+                (set! n (add n 1))
+                (set! l (cdr l))
+                #t
+            )
+        )
+    ))
+    n
+)))
 (define neg (lambda (x) (sub 0 x)))
 (define add (lambda (x y) (sub x (neg y))))
 (define mod (lambda (n d) (sub n (mul d (div n d)))))
@@ -880,20 +858,70 @@ def boot():
 (define band (lambda (x y) (bnot (nand x y))))
 (define bor  (lambda (x y) (nand (bnot x) (bnot y))))
 (define bxor (lambda (x y) (band (nand x y) (bor x y))))
-(define lshift (lambda (x n)
-    (cond
-        ((equal? n 0)   x)
-        ((equal? n 1)   (add x x))
-        (#t             (lshift (lshift x (sub n 1)) 1))
+;; signed integer multiplication from subtraction and right shift (division)
+(define umul (lambda (x y accum) (do
+    (define update (lambda () (do
+        (set! x (div x 2))
+        (set! y (mul y 2))
+    )))
+    (while (lambda () (do
+        (cond
+            ((equal? 0 x) ())
+            ((equal? 0 (band x 0x1)) (do
+                (update)
+                #t
+            ))
+            (#t (do
+                (set! accum (add accum y))
+                (update)
+            ))
+        )
+    )))
+    accum
+)))
+(define umul (lambda (x y z) (
+    cond
+        ((equal? y 1) x) ;; y could have been -1 on entry to smul
+        ((equal? 0 x) z)
+        ((equal? 0 (band x 0x1)) (umul (div x 2) (add y y) z))
+        (#t (umul (div x 2) (add y y) (add z y)))
+)))
+(define smul (lambda (x y) (do
+    (define sign 1)
+    (if
+        (lt? x 0)
+        (set! sign (neg sign))
+        ()
     )
-))
-(define rshift (lambda (x n)
-    (cond
-        ((equal? n 0)   x)
-        ((equal? n 1)   (div x 2))
-        (#t             (rshift (rshift x (sub n 1)) 1))
+    (if
+        (lt? y 0)
+        (set! sign (neg sign))
+        ()
     )
-))
+    (cond
+        ((equal? x 0) 0)
+        ((equal? y 0) 0)
+        ((equal? (abs y) 1) x)
+        (#t (copysign (umul (abs x) (abs y) 0) sign))
+    )
+)))
+(define exact-smul (lambda (x y) (do
+    (define umul (lambda (x y z) (
+        cond
+            ((equal? y 1) x) ;; y could have been -1 on entry to smul
+            ((equal? 0 x) z)
+            ((equal? 0 (band x 0x1)) (umul (div x 2) (add y y) z))
+            (#t (umul (div x 2) (add y y) (add z y)))
+    )))
+    (cond
+        ((equal? x 0) 0)
+        ((equal? y 0) 0)
+        ((lt? x 0) (neg (smul (neg x) y)))
+        ((equal? x 1) y)
+        ((equal? y 1) x)
+        (#t (copysign (umul x (abs y) 0) y))
+    )
+)))
 
     """,
         leval,
