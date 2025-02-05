@@ -863,14 +863,17 @@ def boot():
 (define umul (lambda (x y accum)
     (if
         (while (lambda ()  ;; <= this is where it's not portable
-            (cond
-                ((equal? 0 x) ())
-                (#t
-                    ((lambda (& _) #t)
-                        (if (band x 1) (set! accum (add accum y)) ())
-                        (set! x (div x 2))
-                        (set! y (mul y 2))
+            (if
+                (equal? 0 x)
+                ()
+                ((lambda (& _) #t)
+                    (if
+                        (equal? (band x 1) 1)
+                        (set! accum (add accum y))
+                        ()
                     )
+                    (set! x (div x 2))
+                    (set! y (mul y 2))
                 )
             )
         ))
@@ -883,10 +886,11 @@ def boot():
     (if (lt? x 0) (set! sign (neg sign)) ())
     (if (lt? y 0) (set! sign (neg sign)) ())
     (cond
-        ((equal? x 0) 0)
-        ((equal? y 0) 0)
-        ((equal? (abs y) 1) x)
-        (#t (copysign (umul (abs x) (abs y) 0) sign))
+        ((equal? x 0)       0)
+        ((equal? y 0)       0)
+        ((equal? (abs y) 1) (copysign x sign))
+        ((lt? y x)          (copysign (umul (abs y) (abs x) 0) sign))
+        (#t                 (copysign (umul (abs x) (abs y) 0) sign))
     )
 )))
     """,
