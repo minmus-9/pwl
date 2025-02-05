@@ -18,6 +18,8 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+TFLAG:=
+
 LISP=./lisp.py
 LIBS=../lisp/stdlib.lisp
 
@@ -25,7 +27,7 @@ run:
 	$(LISP) $(LIBS) -
 
 bench:
-	time $(LISP) $(LIBS) ../bench.lisp
+	time $(TFLAG) $(LISP) $(LIBS) ../bench.lisp
 
 sicp:
 	$(LISP) $(LIBS) ../sicp.lisp
