@@ -1402,6 +1402,15 @@ def op_div(frame):
     return binary(frame, f)
 
 
+@glbl("do")
+def op_do(frame):
+    x = frame.x
+    ret = EL
+    while x is not EL:
+        ret, x = splitcar(x)
+    return bounce(frame.c, ret)
+
+
 @glbl("eq?")
 def op_eq(frame):
     def f(x, y):

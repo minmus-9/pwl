@@ -36,9 +36,8 @@
 (define caddddr (lambda (l) (car (cdr (cdr (cdr (cdr l)))))))
 
 ;; }}}
-;; {{{ begin/do
+;; {{{ begin
 
-(define do (lambda (& args) (last args)))
 (define begin do)
 
 ;; }}}
@@ -139,18 +138,7 @@
 ;; {{{ arithmetic
 
 (def (neg x) (sub 0 x))
-(def (add$2 x y) (sub x (neg y)))
-
-(special add (lambda (__special_add_x__ & __special_add_args__)
-    (eval (add$ __special_add_x__ __special_add_args__) 1)))
-
-(def (add$ x args)
-    (if
-        (null? args)
-        `,x
-        `(add$2 ,x ,(add$ (car args) (cdr args)))
-    )
-)
+(def (add x y) (sub x (neg y)))
 
 ;; oh, and mod
 (def (mod n d) (sub n (mul d (div n d))))

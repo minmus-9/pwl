@@ -95,7 +95,7 @@ GPL license header):
 |lisp01-easy |Pure-recursive implementation with a problem                      | 550| 450|3.10|
 |lisp02-recursive |Fixes easy.py's problem, but still has limited recursion     | 650| 550|5.46|
 |lisp03-trampolined  |Features "heap-based" recursion and continuations         |1000| 750|15.5|
-|lisp04-trampolined-fancy |Add FFI, quasiquote and friends, optimizations       |1700|1250|5.93|
+|lisp04-trampolined-fancy |Add FFI, quasiquote and friends, optimizations       |1700|1250|3.40|
 |lisp05-recursive-fast |Recursive lisp with stdlib built in, under 1k LOC       |1000| 800|0.84|
 |lisp06-recursive-fancy |Recursive lisp with stdlib built in, FFI, quasiquote   |1250|1000|0.86|
 
