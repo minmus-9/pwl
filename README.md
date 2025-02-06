@@ -51,11 +51,15 @@ The core language is pretty much complete I think:
 |--------------------------|-----------------------------|
 |`(cond ((p c) ...)`|return `(eval c)` for the `(eval p)` that returns true|
 |`(define sym body)`|bind `body` to `sym` in the current environment|
+|`(if p c a)`|return `(eval a)` if `(eval p)` returns false else `(eval c)`|
 |`(lambda args body)`|create a function|
+|`(quasiquote x)`|aka backtick, begin quasiquoted form|
 |`(quote obj)`|returns obj unevaluated|
 |`(set! sym value)`|redefine the innermost definition of `sym`|
 |`(special sym proc)`|define a special form|
 |`(trap obj)`|returns a list containing a success-flag and a result or error message|
+|`(unquote x)`|aka `,` unquote x, only available for some impls|
+|`(unquote-splicing x)`|aka `,@` unquote and splice in x, only available for some impls|
 
 |Primitive|Description (see the source)|
 |--------------------------|------------------------------|
@@ -67,22 +71,23 @@ The core language is pretty much complete I think:
 |`(cdr list)`|tail of list|
 |`(cons obj list)`|prepend `obj` to list|
 |`(div n1 n2)`|`n1 / n2`|
+|`(do ...)`|return last argument, only a primitive for some impls|
 |`(eq? x y)`|return true if 2 atoms are the same|
 |`(equal? n1 n2)`|return true if 2 numbers are equal|
 |`(error obj)`|raise `list.error` with `obj`|
 |`(eval obj)`|evaluate `obj`|
 |`(exit obj)`|raise `SystemExit` with the given `obj`|
+|`(last list)`|last element of list, only a primitive for some impls|
 |`(lt? n1 n2)`|return true if `n1 < n2`|
 |`(mul n1 n2)`|return `n1 * n2`|
 |`(nand n1 n2)`|return `~(n1 & n2)`|
+|`(null? x)`|return true if x is null, only a primitive for some impls|
 |`(print ...)`|print a list of objects space-separated followed by a newline|
 |`(set-car! list value)`|set the head of a list|
 |`(set-cdr! list list`)|set the tail of a list to another list|
 |`(sub n1 n2`)|`n1 - n2`|
 |`(type obj)`|return a symbol representing the type of `obj`|
-
-Some of the implementations support additional special forms and/or primitives.
-See the source for details.
+|`(while func)`|repeat until func returns false, only avaialable for some impls|
 
 ---
 ## The Implementations
