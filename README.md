@@ -53,7 +53,7 @@ The core language is pretty much complete I think:
 |`(define sym body)`|bind `body` to `sym` in the current environment|
 |`(if p c a)`|return `(eval a)` if `(eval p)` returns false else `(eval c)`|
 |`(lambda args body)`|create a function|
-|`(quasiquote x)`|aka `\``, begin quasiquoted form|
+|`(quasiquote x)`|aka \`, begin quasiquoted form|
 |`(quote obj)`|returns obj unevaluated|
 |`(set! sym value)`|redefine the innermost definition of `sym`|
 |`(special sym proc)`|define a special form|
