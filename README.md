@@ -51,7 +51,7 @@ The core language is pretty much complete I think:
 |--------------------------|-----------------------------|
 |`(cond ((p c) ...)`|return `(eval c)` for the `(eval p)` that returns true|
 |`(define sym body)`|bind `body` to `sym` in the current environment|
-|`(if p c a)`|return `(eval c)` if `(eval p)` returns true else `(eval a)`|
+|`(if p c a)`|return `(eval c)` if `(eval p)` returns true else `(eval a)`, only available in some impls|
 |`(lambda args body)`|create a function|
 |`(quasiquote x)`|aka \`, begin quasiquoted form|
 |`(quote obj)`|aka `'`, returns obj unevaluated|
