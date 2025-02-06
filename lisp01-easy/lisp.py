@@ -26,6 +26,8 @@ import operator
 import sys
 import traceback
 
+sys.setrecursionlimit(1500)
+
 ## {{{ lisp core
 
 T = True
