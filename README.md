@@ -94,14 +94,14 @@ GPL license header):
 |---------|--------------------------------------------------------|----|----|-----|
 |lisp01-easy |Pure-recursive implementation with a problem                      | 550| 450|3.10|
 |lisp02-recursive |Fixes easy.py's problem, but still has limited recursion     | 650| 550|5.46|
-|lisp03-trampolined  |Features "heap-based" recursion and continuations         |1000| 750|15.5|
-|lisp04-trampolined-fancy |Add FFI, quasiquote and friends, optimizations       |1700|1250|3.40|
+|lisp03-trampolined  |Features "heap-based" recursion and continuations         |1000| 750|14.4|
+|lisp04-trampolined-fancy |Add FFI, quasiquote and friends, optimizations       |1700|1250|2.53|
 |lisp05-recursive-fast |Recursive lisp with stdlib built in, under 1k LOC       |1000| 800|0.84|
 |lisp06-recursive-fancy |Recursive lisp with stdlib built in, FFI, quasiquote   |1250|1000|0.86|
 
 The silly benchmark lives in the file `bench.lisp`. FWIW lisp03-trampolined
 is slower partly because (cond) is implemented in terms of (if) and
-(quasiquote). The trampoline overhead is huge. lisp05 and lisp06 implement
+(quasiquote). The trampoline overhead is huge. lisp04 through lisp06 implement
 additional primitives and special forms which is why they're so much faster.
 
 All of the implementations have the following limitations:

@@ -35,11 +35,11 @@ import traceback
 
 
 def trampoline(func, *args):
-    while True:
-        ret = func(*args)
-        if len(ret) == 1:
-            return ret[0]
-        func, args = ret
+    try:
+        while True:
+            func, args = func(*args)
+    except StopIteration as exc:
+        return exc.args[0]
 
 
 def bounce(func, *args):
@@ -47,7 +47,7 @@ def bounce(func, *args):
 
 
 def land(value):
-    return (value,)
+    raise StopIteration(value)
 
 
 ## }}}

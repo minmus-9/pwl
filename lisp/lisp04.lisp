@@ -178,27 +178,6 @@
     )
 )
 
-;; signed integer multiplication from subtraction and right shift (division)
-(def (smul x y)
-    (define umul (lambda (x y z) (
-        cond
-            ((equal? y 1) x) ;; y could have been -1 on entry to smul
-            ((equal? 0 x) z)
-            ((equal? 0 (band x 0x1)) (umul (rshift x 1) (add y y) z))
-            (#t (umul (rshift x 1) (add y y) (add z y)))
-    )))
-    (cond
-        ((equal? x 0) 0)
-        ((equal? y 0) 0)
-        ((lt? x 0) (neg (smul (neg x) y)))
-        ((equal? x 1) y)
-        ((equal? y 1) x)
-        (#t (copysign (umul x (abs y) 0) y))
-    )
-)
-
-;(smul 37 23)  ;; 851
-
 ;; }}}
 ;; {{{ comparison predicates
 
@@ -675,6 +654,41 @@
         ))
     )
 )
+
+;; }}}
+;; {{{ smul
+
+;; signed integer multiplication from subtraction and right shift (division)
+(define umul (lambda (x y accum)
+    ((lambda (c)
+        (if
+            (equal? 0 x)
+            accum
+            ((lambda (& _) (c c))
+                (if
+                    (equal? (band x 1) 1)
+                    (set! accum (add accum y))
+                    ()
+                )
+                (set! x (div x 2))
+                (set! y (mul y 2))
+            )
+        )
+    ) (call/cc (lambda (cc) cc)))
+))
+
+(define smul (lambda (x y) (do
+    (define sign 1)
+    (if (lt? x 0) (set! sign (neg sign)) ())
+    (if (lt? y 0) (set! sign (neg sign)) ())
+    (cond
+        ((equal? x 0)       0)
+        ((equal? y 0)       0)
+        ((equal? (abs y) 1) (copysign x sign))
+        ((lt? y x)          (copysign (umul (abs y) (abs x) 0) sign))
+        (#t                 (copysign (umul (abs x) (abs y) 0) sign))
+    )
+)))
 
 ;; }}}
 

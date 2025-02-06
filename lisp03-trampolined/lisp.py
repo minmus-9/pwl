@@ -45,13 +45,11 @@ class Struct:
 
 
 def trampoline(func, *args):
-    while True:
-        result = func(*args)
-        assert isinstance(result, tuple) and tuple
-        if len(result) == 1:
-            return result[0]
-        assert len(result) == 2
-        func, args = result
+    try:
+        while True:
+            func, args = func(*args)
+    except StopIteration as exc:
+        return exc.args[0]
 
 
 def bounce(func, *args):
@@ -59,7 +57,7 @@ def bounce(func, *args):
 
 
 def land(value):
-    return (value,)
+    raise StopIteration(value)
 
 
 ## }}}
