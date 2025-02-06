@@ -54,7 +54,7 @@ The core language is pretty much complete I think:
 |`(if p c a)`|return `(eval a)` if `(eval p)` returns false else `(eval c)`|
 |`(lambda args body)`|create a function|
 |`(quasiquote x)`|aka \`, begin quasiquoted form|
-|`(quote obj)`|returns obj unevaluated|
+|`(quote obj)`|aka `'`, returns obj unevaluated|
 |`(set! sym value)`|redefine the innermost definition of `sym`|
 |`(special sym proc)`|define a special form|
 |`(trap obj)`|returns a list containing a success-flag and a result or error message|
