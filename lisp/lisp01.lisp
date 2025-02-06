@@ -1,4 +1,4 @@
-;; stdlib.lisp - small runtime, much of which is from other sources
+;; lisp01.lisp -- small runtime, much of which is from other sources
 ;;
 ;; pwl - python with lisp, a collection of lisp evaluators for Python
 ;;       https://github.com/minmus-9/pwl

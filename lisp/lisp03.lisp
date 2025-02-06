@@ -1,4 +1,4 @@
-;; cont.lisp - continuation-based runtime for lisp.py and up
+;; lisp03.lisp - continuation-based runtime
 ;;
 ;; pwl - python with lisp, a collection of lisp evaluators for Python
 ;;       https://github.com/minmus-9/pwl

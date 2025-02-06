@@ -20,7 +20,9 @@
 
 TFLAG:=
 
-LISP=./lisp.py
+PYTHON:=python3
+
+LISP=$(PYTHON) ./lisp.py
 LIBS=
 
 run:

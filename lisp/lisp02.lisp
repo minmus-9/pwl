@@ -1,4 +1,4 @@
-;; runtime that builds on stdlib.lisp
+;; lisp02.lisp -- runtime that builds on lisp01.lisp
 ;;
 ;; pwl - python with lisp, a collection of lisp evaluators for Python
 ;;       https://github.com/minmus-9/pwl
