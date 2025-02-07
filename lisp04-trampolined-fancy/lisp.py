@@ -34,11 +34,15 @@ import traceback
 ## {{{ trampoline
 
 
+class _Land(Exception):
+    pass
+
+
 def trampoline(func, *args):
     try:
         while True:
             func, args = func(*args)
-    except StopIteration as exc:
+    except _Land as exc:
         return exc.args[0]
 
 
@@ -47,7 +51,7 @@ def bounce(func, *args):
 
 
 def land(value):
-    raise StopIteration(value)
+    raise _Land(value)
 
 
 ## }}}
