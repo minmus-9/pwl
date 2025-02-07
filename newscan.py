@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"new scanner test"
+"new scanner test, fastest lisp yet"
 
 ## pylint: disable=invalid-name,unbalanced-tuple-unpacking
 ## XXX pylint: disable=missing-docstring
@@ -16,7 +16,7 @@ class error(Exception):
     pass
 
 
-## {{{ scanner 2
+## {{{ regex-based scanner
 
 
 class Scanner:
@@ -47,7 +47,7 @@ class Scanner:
             ",@": self.T_COMMA_AT,
         }
 
-    def feed(self, text):
+    def feed(self, text):  ## NB this is not a proper event-driven feed()!!!
         if text is None:
             self.push(self.T_EOF, None)
             return
@@ -877,6 +877,15 @@ boot()
 
 ## }}}
 
+def test():
+    import glob
+    for _ in range(100):
+        s = Scanner(lambda *_: None)
+        for fn in glob.glob("lisp/*.lisp"):
+            with open(fn) as fp:
+                s.feed(fp.read())
+        s.feed(None)
 
 if __name__ == "__main__":
-    main()
+    test()
+    #main()
