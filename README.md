@@ -103,6 +103,7 @@ GPL license header):
 |lisp04-trampolined-fancy |Add FFI, quasiquote and friends, optimizations       |1700|1250|2.53|
 |lisp05-recursive-fast |Recursive lisp with stdlib built in, under 1k LOC       |1000| 800|0.84|
 |lisp06-recursive-fancy |Recursive lisp with stdlib built in, FFI, quasiquote   |1250|1000|0.86|
+|lisp07-unsafe |lisp06-recursive-fancy with all error checks removed            |1200| 950|0.52|
 
 The silly benchmark lives in the file `bench.lisp`. FWIW lisp03-trampolined
 is slower partly because (cond) is implemented in terms of (if) and
@@ -276,6 +277,13 @@ implementation to be able to do anything meaningful.
 ### `lisp06-recursive-fancy`
 
 This is `lisp05-recursive-fast` with FFI and quasiquote thrown in.
+
+---
+### `lisp07-unsafe`
+
+This is `lisp06-recursive-fancy` with all error checking removed; i.e., you
+can corrupt the internal state of the lisp engine with typos and whatnot!
+This is the fastest version I've made so far.
 
 ---
 ## Notes on the representation of ()...
