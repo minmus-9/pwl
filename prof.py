@@ -20,38 +20,53 @@
 "profile test"
 
 ## pylint: disable=invalid-name
+## XXX pylint: disable=missing-docstring
 
+import cProfile
 import os
+import pstats
 import sys
 
-import pstats
 
 def f8(x):
     tw = int(x)
-    x  = (x - tw) * 1e3
+    x = (x - tw) * 1e3
     ms = int(x)
-    x  = (x - ms) * 1e3
+    x = (x - ms) * 1e3
     us = int(x)
     ns = int((x - us) * 1e3)
-    return "%d.%03d_%03d_%03d" % (tw, ms, us, ns)
+    return "%d.%03d_%03d_%03d" % (
+        tw,
+        ms,
+        us,
+        ns,
+    )  ## pylint: disable=consider-using-f-string
+
 
 pstats.f8 = f8
 
-import cProfile
-
 PROFILE = "/dev/shm/profile"
 
-file_or_dir = sys.argv[1]
-if os.path.isfile(file_or_dir):
-    file_or_dir = os.path.dirname(file_or_dir)
-if not os.path.isdir(file_or_dir):
-    raise ValueError(f"cannot find {file_or_dir!r}")
-sys.path.insert(0, file_or_dir)
-from lisp import main
-sys.argv[1:] = sys.argv[2:]
 
-cProfile.run("main()", PROFILE)
+def main():
+    file_or_dir = sys.argv[1]
+    if os.path.isfile(file_or_dir):
+        file_or_dir = os.path.dirname(file_or_dir)
+    if not os.path.isdir(file_or_dir):
+        raise ValueError(f"cannot find {file_or_dir!r}")
+    sys.path.insert(0, file_or_dir)
 
-pstats.Stats(PROFILE).strip_dirs().sort_stats("tottime").print_stats(.15)
+    ## pylint: disable=unused-import,no-name-in-module
+    from lisp import main as run  ## pylint: disable=import-outside-toplevel
+
+    sys.argv[1:] = sys.argv[2:]
+
+    cProfile.run("run()", PROFILE)
+
+    pstats.Stats(PROFILE).strip_dirs().sort_stats("tottime").print_stats(0.15)
+
+
+if __name__ == "__main__":
+    main()
 
 ## EOF

@@ -1,11 +1,23 @@
 #!/usr/bin/env python3
 
+"new scanner test"
+
+## pylint: disable=invalid-name,unbalanced-tuple-unpacking
+## XXX pylint: disable=missing-docstring
+
 import locale
 import os
 import re
 import sys
+import traceback
+
+
+class error(Exception):
+    pass
+
 
 ## {{{ scanner 2
+
 
 class Scanner:
     T_SYM = "sym"
@@ -80,6 +92,8 @@ class Scanner:
                 except:  ## pylint: disable=bare-except
                     pass  ## value error, range error
         self.callback(ttype, token)
+
+
 ## }}}
 ## {{{ parser
 
@@ -137,7 +151,7 @@ def load(filename, callback):
     if os.path.isabs(filename):
         path = filename
     else:
-        for d in [".",os.path.dirname(__file__)] + sys.path:
+        for d in [".", os.path.dirname(__file__)] + sys.path:
             path = os.path.join(d, filename)
             if os.path.isfile(path):
                 break
@@ -154,7 +168,10 @@ EL = object()
 T = True
 SENTINEL = object()
 
+
 class Symbol:
+    ## pylint: disable=too-few-public-methods
+
     __slots__ = ["s"]
 
     def __init__(self, s):
@@ -163,13 +180,17 @@ class Symbol:
     def __repr__(self):
         return self.s
 
+
 ST = {}
+
 
 def symbol(s):
     return ST.setdefault(s, Symbol(s))
 
+
 def atom(x):
     return isinstance(x, Symbol) or x is EL or x is T
+
 
 def eq(x, y):
     return atom(x) and x is y
@@ -198,10 +219,12 @@ class Queue:
 ## }}}
 ## {{{ env and globals
 
+
 class Env(dict):
     __slots__ = ["p"]
 
     def __init__(self, params, args, parent):
+        super().__init__()
         self.p = parent
         variadic = False
         while params is not EL:
@@ -252,6 +275,7 @@ class Env(dict):
             e = e.p
         raise NameError(key)
 
+
 GLB = Env(EL, EL, SENTINEL)
 GLB.set(symbol("#t"), T)
 
@@ -290,6 +314,7 @@ class Lambda:
 
     def __repr__(self):
         return "(lambda " + stringify(self.p) + " " + stringify(self.b) + ")"
+
 
 ## }}}
 ## {{{ stringify
@@ -600,7 +625,7 @@ def op_trap(args, e):
         ok = EL
         t, v = sys.exc_info()[:2]
         res = f"{t.__name__}: {str(v)}"
-    return cons(ok, cons(res, EL))
+    return [ok, [res, EL]]
 
 
 @glbl("type")
