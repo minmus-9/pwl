@@ -1,4 +1,4 @@
-# README.md for pwl (Python With (Complete) Lisp)
+# README.md for pwl (Python With (Complete) Lisp) Interpreter/Evaluator
 
 ## Introduction
 
