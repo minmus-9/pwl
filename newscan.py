@@ -151,7 +151,7 @@ def load(filename, callback):
     if os.path.isabs(filename):
         path = filename
     else:
-        for d in [".", os.path.dirname(__file__)] + sys.path:
+        for d in ["", os.path.dirname(__file__)] + sys.path:
             path = os.path.join(d, filename)
             if os.path.isfile(path):
                 break
