@@ -18,15 +18,16 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+P:=python3
 TFLAG:= -p
 
 all:
 
 bench:
-	@for d in lisp[0-9]*/; do (echo; cd $$d && $(MAKE) TFLAG=$(TFLAG) $@; echo); done
+	@for d in lisp[0-9]*/; do (echo; cd $$d && $(MAKE) PYTHON=$(P) TFLAG=$(TFLAG) $@; echo); done
 
 sicp:
-	@for d in lisp[0-9]*/; do (echo; cd $$d && $(MAKE) TFLAG=$(TFLAG) $@; echo); done
+	@for d in lisp[0-9]*/; do (echo; cd $$d && $(MAKE) PYTHON=$(P) TFLAG=$(TFLAG) $@; echo); done
 
 clean:
 	find . -type d -name __pycache__ -print0 | xargs -0 -n 25 rm -rf || true
