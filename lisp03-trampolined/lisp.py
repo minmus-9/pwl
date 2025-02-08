@@ -28,14 +28,14 @@ lisp02/lisp.py
 import sys
 import traceback
 
-## {{{ Struct (dumb)
+## {{{ Frame (dumb)
 
 
-class Struct:
+class Frame:
     ## pylint: disable=too-few-public-methods
 
-    def __init__(self, *frames, **kw):
-        for frame in frames:
+    def __init__(self, frame, **kw):
+        if frame is not None:
             self.__dict__.update(frame.__dict__)
         self.__dict__.update(kw)
 
@@ -240,9 +240,9 @@ def fpop():
     return ret
 
 
-def fpush(*frames, **kw):
+def fpush(frame=None, **kw):
     global STACK  ## pylint: disable=global-statement
-    STACK = cons(Struct(*frames, **kw), STACK)
+    STACK = cons(Frame(frame, **kw), STACK)
 
 
 def freset():
@@ -286,7 +286,7 @@ def op_cond_setup(frame, args):
     predicate, consequent = unpack(head, 2)
 
     fpush(frame, x=args, consequent=consequent)
-    return bounce(leval_, Struct(frame, c=op_cond_cont, x=predicate))
+    return bounce(leval_, Frame(frame, c=op_cond_cont, x=predicate))
 
 
 def op_cond_cont(value):
@@ -294,7 +294,7 @@ def op_cond_cont(value):
     args = frame.x
 
     if value is not EL:
-        return bounce(leval_, Struct(frame, x=frame.consequent))
+        return bounce(leval_, Frame(frame, x=frame.consequent))
     if args is EL:
         return bounce(frame.c, EL)
     return op_cond_setup(frame, args)
@@ -320,7 +320,7 @@ def op_define(frame):
     sym, defn = unpack(frame.x, 2)
 
     fpush(frame, sym=sym)
-    return bounce(leval_, Struct(frame, x=defn, c=op_define_cont))
+    return bounce(leval_, Frame(frame, x=defn, c=op_define_cont))
 
 
 @spcl("lambda")
@@ -349,7 +349,7 @@ def op_setbang(frame):
     sym, defn = unpack(frame.x, 2)
 
     fpush(frame, sym=sym)
-    return bounce(leval_, Struct(frame, x=defn, c=op_setbang_cont))
+    return bounce(leval_, Frame(frame, x=defn, c=op_setbang_cont))
 
 
 def op_special_cont(value):
@@ -370,7 +370,7 @@ def op_special(frame):
     sym, defn = unpack(frame.x, 2)
 
     fpush(frame, sym=sym)
-    return bounce(leval_, Struct(frame, x=defn, c=op_special_cont))
+    return bounce(leval_, Frame(frame, x=defn, c=op_special_cont))
 
 
 @spcl("trap")
@@ -446,7 +446,7 @@ def op_callcc(frame):
     continuation = Continuation(frame.c)
 
     arg = cons(continuation, EL)
-    return bounce(x, Struct(frame, x=arg))
+    return bounce(x, Frame(frame, x=arg))
 
 
 @glbl("car")
@@ -504,7 +504,7 @@ def op_eval(frame):
         p.feed(x)
         p.feed(None)
         x = l[-1] if l else EL
-    return bounce(leval_, Struct(frame, x=x))
+    return bounce(leval_, Frame(frame, x=x))
 
 
 def op_exit_cont(value):
@@ -516,7 +516,7 @@ def op_exit(frame):
     (x,) = unpack(frame.x, 1)
     if isinstance(x, int):
         raise SystemExit(x)
-    return bounce(stringify_, Struct(frame, x=x, c=op_exit_cont))
+    return bounce(stringify_, Frame(frame, x=x, c=op_exit_cont))
 
 
 @glbl("lt?")
@@ -546,7 +546,7 @@ def op_print_cont(value):
     print(value, end=sep)
 
     fpush(frame, x=args)
-    return bounce(stringify_, Struct(frame, x=arg, c=op_print_cont))
+    return bounce(stringify_, Frame(frame, x=arg, c=op_print_cont))
 
 
 @glbl("print")
@@ -559,7 +559,7 @@ def op_print(frame):
     arg, args = car(args), cdr(args)
 
     fpush(frame, x=args)
-    return bounce(stringify_, Struct(frame, x=arg, c=op_print_cont))
+    return bounce(stringify_, Frame(frame, x=arg, c=op_print_cont))
 
 
 @glbl("set-car!")
@@ -580,7 +580,7 @@ def op_sub(frame):
 @glbl(">string")
 def op_tostring(frame):
     (x,) = unpack(frame.x, 1)
-    return bounce(stringify_, Struct(frame, x=x))
+    return bounce(stringify_, Frame(frame, x=x))
 
 
 @glbl(">symbol")
@@ -611,7 +611,7 @@ def lambda_params_done(paramstr):
     body = frame.x
 
     fpush(frame, x=paramstr)
-    return bounce(stringify_, Struct(frame, x=body, c=lambda_body_done))
+    return bounce(stringify_, Frame(frame, x=body, c=lambda_body_done))
 
 
 class Lambda:
@@ -626,12 +626,12 @@ class Lambda:
         args = frame.x
         parent = frame.e if self.special else self.env  ## specials are weird
         e = Environment(self.params, args, parent)
-        return bounce(leval_, Struct(frame, x=self.body, e=e))
+        return bounce(leval_, Frame(frame, x=self.body, e=e))
 
     def as_str_(self, frame):
         fpush(frame, x=self.body)
         return bounce(
-            stringify_, Struct(frame, x=self.params, c=lambda_params_done)
+            stringify_, Frame(frame, x=self.params, c=lambda_params_done)
         )
 
 
@@ -657,13 +657,13 @@ class Continuation:
 
 
 def stringify(x, env=GLOBALS):
-    return trampoline(stringify_, Struct(x=x, c=land, e=env))
+    return trampoline(stringify_, Frame(None, x=x, c=land, e=env))
 
 
 def stringify_setup(frame, args):
     arg, args = car(args), cdr(args)
     fpush(frame, x=args)
-    return bounce(stringify_, Struct(frame, x=arg, c=stringify_cont))
+    return bounce(stringify_, Frame(frame, x=arg, c=stringify_cont))
 
 
 def stringify_cont(value):
@@ -695,7 +695,7 @@ def stringify_(frame):
     if isinstance(x, str):  ## ... and str here
         return bounce(frame.c, '"' + repr(x)[1:-1].replace('"', '\\"') + '"')
     if isinstance(x, Lambda):
-        return bounce(x.as_str_, Struct(frame, x=x))
+        return bounce(x.as_str_, Frame(frame, x=x))
     if isinstance(x, Continuation):
         return bounce(frame.c, "[continuation]")
     if not isinstance(x, list):
@@ -713,13 +713,13 @@ def stringify_(frame):
 
 
 def leval(x, env=GLOBALS):
-    return trampoline(leval_, Struct(x=x, c=land, e=env))
+    return trampoline(leval_, Frame(None, x=x, c=land, e=env))
 
 
 def leval_setup(frame, args):
     arg, args = car(args), cdr(args)
     fpush(frame, x=args)
-    return bounce(leval_, Struct(frame, x=arg, c=leval_next_arg))
+    return bounce(leval_, Frame(frame, x=arg, c=leval_next_arg))
 
 
 def leval_next_arg(value):
@@ -734,7 +734,7 @@ def leval_next_arg(value):
                 proc = f.proc
                 break
             ret = cons(f.x, ret)
-        return bounce(proc, Struct(frame, x=ret))
+        return bounce(proc, Frame(frame, x=ret))
 
     fpush(frame, x=value)
     return leval_setup(frame, args)
@@ -770,12 +770,12 @@ def leval_(frame):
         except NameError:
             pass
         else:
-            return bounce(op, Struct(frame, x=args))
+            return bounce(op, Frame(frame, x=args))
     else:
         listcheck(sym)
 
     fpush(frame, x=args)
-    return bounce(leval_, Struct(frame, x=sym, c=leval_proc_done))
+    return bounce(leval_, Frame(frame, x=sym, c=leval_proc_done))
 
 
 ## }}}
