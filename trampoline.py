@@ -141,7 +141,10 @@ def main():
     "test code"
 
     ## so we can print out arbitrary numbers
-    sys.set_int_max_str_digits(0)
+    try:
+        sys.set_int_max_str_digits(0)
+    except AttributeError:
+        pass
 
     ## try bad_factorial(10000) which will puke
     try:
