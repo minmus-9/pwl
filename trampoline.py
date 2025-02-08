@@ -137,7 +137,7 @@ def resume(result):
 ########################################################################
 
 
-def test():
+def main():
     "test code"
 
     ## so we can print out arbitrary numbers
@@ -157,7 +157,7 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    main()
 
 
 ## EOF
