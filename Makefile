@@ -24,12 +24,17 @@ TFLAG:= -p
 all:
 
 bench:
-	@for d in lisp[0-9]*/; do (echo; cd $$d && $(MAKE) PYTHON=$(P) TFLAG=$(TFLAG) $@; echo); done
+	@for d in lisp[0-9]*/; do \
+	    (echo; cd $$d && $(MAKE) PYTHON=$(P) TFLAG=$(TFLAG) $@; echo); \
+	done
 
 sicp:
-	@for d in lisp[0-9]*/; do (echo; cd $$d && $(MAKE) PYTHON=$(P) TFLAG=$(TFLAG) $@; echo); done
+	@for d in lisp[0-9]*/; do \
+	    (echo; cd $$d && $(MAKE) PYTHON=$(P) TFLAG=$(TFLAG) $@; echo); \
+	done
 
 clean:
-	find . -type d -name __pycache__ -print0 | xargs -0 -n 25 rm -rf || true
+	find . -type d -name __pycache__ -print0 | \
+	    xargs -0 -n 25 rm -rf || true
 
 ## EOF

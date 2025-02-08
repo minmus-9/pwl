@@ -29,9 +29,9 @@ run:
 	$(LISP) $(LIBS) -
 
 bench:
-	time $(TFLAG) $(LISP) $(LIBS) ../bench.lisp
+	time $(TFLAG) $(LISP) $(LIBS) ../examples/bench.lisp
 
 sicp:
-	$(LISP) $(LIBS) ../sicp.lisp
+	$(LISP) $(LIBS) ../examples/sicp.lisp
 
 ## EOF
