@@ -1,4 +1,4 @@
-# README.md for pwl (Python With (Complete) Lisp) Interpreter/Evaluator
+# pwl (Python With (~Complete) Lisp) Interpreter/Evaluator
 
 ## Introduction
 
@@ -25,11 +25,6 @@ fun to play with at a minimum. I've been able to run nontrivial code
 from google, SICP, and other places with this thing (after obvious
 transformations) which makes it even more fun to mess with.
 
-The lisps included here are "complete" in the sense that you should be
-able to bootstrap an entire lisp environment using only what is provided.
-You'll need to add I/O, etc if you want that stuff. This code is really
-easy to hack on, though.
-
 ---
 ## TL;DR Running the code
 
@@ -44,6 +39,11 @@ make run    ## run the repl
 
 ---
 ## The Language
+
+The lisps included here are "complete" in the sense that you should be
+able to bootstrap an entire lisp environment using only what is provided.
+You'll need to add I/O, etc if you want that stuff. This code is really
+easy to hack on, though.
 
 The core language is pretty much complete I think:
 
