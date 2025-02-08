@@ -45,7 +45,7 @@ def f8(x):
 
 pstats.f8 = f8
 
-PROFILE = "/dev/shm/profile"
+PROFILE = "profile"
 
 
 def main():

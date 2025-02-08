@@ -34,6 +34,7 @@ sicp:
 	done
 
 clean:
+	rm -f profile
 	find . -type d -name __pycache__ -print0 | \
 	    xargs -0 -n 25 rm -rf || true
 
