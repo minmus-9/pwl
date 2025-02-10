@@ -47,6 +47,10 @@ def set_cdr(x, y):
     x[1] = y
 
 
+def splitcar(x):
+    return x[0], x[1]
+
+
 ## }}}
 ## {{{ symbol
 
@@ -214,6 +218,7 @@ class Scanner:
 
     def k_comma(self, ch):
         if ch == "@":
+            self.token.append("@")
             self.push(self.T_COMMA_AT)
         else:
             self.pos -= 1
@@ -232,17 +237,20 @@ class Scanner:
     def c_comma(self, ch):
         if self.token:
             raise SyntaxError(f"{ch!r} not a delimiter")
+        self.token.append(",")
         return self.k_comma
 
     def c_tick(self, ch):
         if self.token:
             raise SyntaxError(f"{ch!r} not a delimiter")
+        self.token.append(ch)
         self.push(self.T_TICK)
         return self.k_sym
 
     def c_backtick(self, ch):
         if self.token:
             raise SyntaxError(f"{ch!r} not a delimiter")
+        self.token.append(ch)
         self.push(self.T_BACKTICK)
         return self.k_sym
 
@@ -286,90 +294,72 @@ class Scanner:
 
 
 class Parser:
+    Q_MAP = {
+        "'": symbol("quote"),
+        "`": symbol("quasiquote"),
+        ",": symbol("unquote"),
+        ",@": symbol("unquote-splicing"),
+    }
+
     def __init__(self, callback):
         self.callback = callback
         self.stack = []
         self.qstack = []
         self.scanner = Scanner(self.process_token)
         self.feed = self.scanner.feed
-        self.q_map = {  ## could if-away these special cases but just use dict
-            symbol("'"): symbol("quote"),
-            symbol("`"): symbol("quasiquote"),
-            symbol(","): symbol("unquote"),
-            symbol(",@"): symbol("unquote-splicing"),
+        self.lut = {
+            self.scanner.T_SYM: self.t_sym,
+            self.scanner.T_INT: self.add,
+            self.scanner.T_FLOAT: self.add,
+            self.scanner.T_STRING: self.add,
+            self.scanner.T_TICK: self.set_up_quote,
+            self.scanner.T_BACKTICK: self.set_up_quote,
+            self.scanner.T_COMMA: self.set_up_quote,
+            self.scanner.T_COMMA_AT: self.set_up_quote,
+            self.scanner.T_LPAR: self.t_lpar,
+            self.scanner.T_RPAR: self.t_rpar,
+            self.scanner.T_EOF: self.t_eof,
         }
 
-    def process_token(self, ttype, token):
-        ## pylint: disable=too-many-branches
-        ## ugly, but the quickest to write
-        if ttype == self.scanner.T_SYM:
-            self.add(symbol(token))
-        elif ttype == self.scanner.T_LPAR:
-            self.stack.append(Queue())
-        elif ttype == self.scanner.T_RPAR:
-            assert self.stack  ## Scanner checks this
-            q = self.stack.pop()
-            l = self.filter(q.head())
-            if not self.stack:
-                self.callback(l)
-            else:
-                self.add(l)
-        elif ttype in (
-            self.scanner.T_INT,
-            self.scanner.T_REAL,
-            self.scanner.T_STR,
-        ):
-            self.add(token)
-        elif ttype == self.scanner.T_TICK:
-            self.set_up_quote("'")
-            #self.add(symbol("'"))
-        elif ttype == self.scanner.T_BACKTICK:
-            self.set_up_quote("`")
-            #self.add(symbol("`"))
-        elif ttype == self.scanner.T_COMMA:
-            self.set_up_quote(",")
-            #self.add(symbol(","))
-        elif ttype == self.scanner.T_COMMA_AT:
-            self.set_up_quote(",@")
-            #self.add(symbol(",@"))
-        elif ttype == self.scanner.T_EOF:
-            assert not self.stack  ## Scanner checks this
+    def t_sym(self, token):
+        self.add(symbol(token))
+
+    def t_lpar(self, _):
+        self.qstack.append(")")
+        self.stack.append(Queue())
+
+    def t_rpar(self, _):
+        assert self.stack  ## Scanner checks this
+        assert self.qstack.pop() == ")"
+        l = self.quote_wrap(self.stack.pop().head())
+        if not self.stack:
+            self.callback(l)
         else:
-            raise RuntimeError((ttype, token))
+            self.add(l)
+
+    def t_eof(self, _):
+        assert not self.stack  ## Scanner checks this
+        if self.qstack:
+            raise SyntaxError("unclosed quasiquote")
+
+    def process_token(self, ttype, token):
+        self.lut[ttype](token)
 
     def add(self, x):
         if not self.stack:
             raise SyntaxError(f"expected '(' got {x!r}")
-        self.stack[-1].enqueue(x)
+        self.stack[-1].enqueue(self.quote_wrap(x))
+
+    def quote_wrap(self, x):
+        ret = x
+        while self.qstack and isinstance(self.qstack[-1], Symbol):
+            s = self.qstack.pop()
+            ret = cons(s, cons(ret, EL))
+        return ret
 
     def set_up_quote(self, s):
-        s = self.q_map[symbol(s)]
-        q = Queue()
-        q.enqueue(s)
-        self.qstack.append(q)
-
-    def filter(self, sexpr):
-        ## pylint: disable=no-self-use
-        "process ' ` , ,@"
-        q = Queue()
-
-        ## NB we know this is a well-formed list
-        while sexpr is not EL:
-            elt, sexpr = splitcar(sexpr)
-            if isinstance(elt, Symbol) and elt in self.q_map:
-                elt, sexpr = self.process_syms(elt, sexpr)
-            q.enqueue(elt)
-        return q.head()
-
-    def process_syms(self, elt, sexpr):
-        replacement = self.q_map[elt]
-        if sexpr is EL:
-            raise SyntaxError(f"got {elt!r} at end of list")
-        quoted, sexpr = splitcar(sexpr)
-        if isinstance(quoted, Symbol) and quoted in self.q_map:
-            quoted, sexpr = self.process_syms(quoted, sexpr)
-        elt = cons(replacement, cons(quoted, EL))
-        return elt, sexpr
+        s = self.Q_MAP[s]
+        self.qstack.append(s)
 
 
 ## }}}
@@ -410,19 +400,40 @@ def load(filename, callback=None):
 
 
 ## }}}
+## {{{ recursive stringify
+
+
+def stringify(x):
+    if x is EL:
+        return "()"
+    if isinstance(x, (int, float, str, Symbol)):
+        return str(x)
+    if not isinstance(x, list):
+        return repr(x)
+    y = []
+    while x is not EL:
+        z, x = splitcar(x)
+        y.append(stringify(z))
+    return "(" + " ".join(y) + ")"
+
+
+## }}}
 
 
 def main():
     import time  ## pylint: disable=import-outside-toplevel
 
-    s = Scanner(lambda *_: print(_))
+    s = Scanner(lambda *_: None)
+    it = s
+    p = Parser(lambda expr: print(stringify(expr)))
+    p = Parser(lambda _: None)
+    it = p
     n = 1
-    #s = Scanner(lambda *_: None)
-    #n = 10000
+    n = 10000
     src = """
         (add 1 2.1); comment
         (error "abc")
-        (let ([x 1] [y 2]) `,(add x y ,@()))
+        (let ([x 1] [y '2]) `,(add x y (,z) ,@()))
         (define !1 (lambda (n)
             (if
                 (define n! 1)
@@ -439,8 +450,8 @@ def main():
     b = n * len(src)
     t0 = time.time()
     for _ in range(n):
-        s.feed(src)
-    s.feed(None)
+        it.feed(src)
+    it.feed(None)
     dt = time.time() - t0
     print(dt, b / dt)
 
