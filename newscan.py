@@ -289,6 +289,7 @@ class Parser:
     def __init__(self, callback):
         self.callback = callback
         self.stack = []
+        self.qstack = []
         self.scanner = Scanner(self.process_token)
         self.feed = self.scanner.feed
         self.q_map = {  ## could if-away these special cases but just use dict
@@ -320,13 +321,17 @@ class Parser:
         ):
             self.add(token)
         elif ttype == self.scanner.T_TICK:
-            self.add(symbol("'"))
+            self.set_up_quote("'")
+            #self.add(symbol("'"))
         elif ttype == self.scanner.T_BACKTICK:
-            self.add(symbol("`"))
+            self.set_up_quote("`")
+            #self.add(symbol("`"))
         elif ttype == self.scanner.T_COMMA:
-            self.add(symbol(","))
+            self.set_up_quote(",")
+            #self.add(symbol(","))
         elif ttype == self.scanner.T_COMMA_AT:
-            self.add(symbol(",@"))
+            self.set_up_quote(",@")
+            #self.add(symbol(",@"))
         elif ttype == self.scanner.T_EOF:
             assert not self.stack  ## Scanner checks this
         else:
@@ -336,6 +341,12 @@ class Parser:
         if not self.stack:
             raise SyntaxError(f"expected '(' got {x!r}")
         self.stack[-1].enqueue(x)
+
+    def set_up_quote(self, s):
+        s = self.q_map[symbol(s)]
+        q = Queue()
+        q.enqueue(s)
+        self.qstack.append(q)
 
     def filter(self, sexpr):
         ## pylint: disable=no-self-use
@@ -406,8 +417,8 @@ def main():
 
     s = Scanner(lambda *_: print(_))
     n = 1
-    s = Scanner(lambda *_: None)
-    n = 10000
+    #s = Scanner(lambda *_: None)
+    #n = 10000
     src = """
         (add 1 2.1); comment
         (error "abc")
