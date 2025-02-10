@@ -20,6 +20,89 @@
 ## pylint: disable=invalid-name
 ## XXX pylint: disable=missing-docstring
 
+
+## {{{ basics
+
+
+EL = object()
+
+
+def car(x):
+    return x[0]
+
+
+def cdr(x):
+    return x if x is EL else x[1]
+
+
+def cons(x, y):
+    return [x, y]
+
+
+def set_car(x, y):
+    x[0] = y
+
+
+def set_cdr(x, y):
+    x[1] = y
+
+
+## }}}
+## {{{ symbol
+
+
+class Symbol:
+    __slots__ = ["s"]
+
+    def __init__(self, s):
+        assert type(s) is str and s  ## pylint: disable=unidiomatic-typecheck
+        self.s = s
+
+    def __repr__(self):
+        return self.s
+
+
+SYMBOLS = {}
+
+
+def symbol(s):
+    if s not in SYMBOLS:
+        SYMBOLS[s] = Symbol(s)
+    return SYMBOLS[s]
+
+
+## }}}
+## {{{ queue
+
+
+class Queue:
+    __slots__ = ["h", "t"]
+
+    def __init__(self):
+        self.h = self.t = EL
+
+    def enqueue(self, x):
+        n = cons(x, EL)
+        if self.h is EL:
+            self.h = n
+        else:
+            set_cdr(self.t, n)
+        self.t = n
+
+    def dequeue(self):
+        n = self.h
+        self.h = cdr(n)
+        if self.h is EL:
+            self.t = EL
+        if n is EL:
+            raise ValueError("queue is empty")
+        return car(n)
+
+    def head(self):
+        return self.h
+
+
+## }}}
 ## {{{ scanner
 
 
@@ -196,6 +279,123 @@ class Scanner:
     def c_ws(self, _):
         self.push(self.T_SYM)
         return self.k_sym
+
+
+## }}}
+## {{{ parser
+
+
+class Parser:
+    def __init__(self, callback):
+        self.callback = callback
+        self.stack = []
+        self.scanner = Scanner(self.process_token)
+        self.feed = self.scanner.feed
+        self.q_map = {  ## could if-away these special cases but just use dict
+            symbol("'"): symbol("quote"),
+            symbol("`"): symbol("quasiquote"),
+            symbol(","): symbol("unquote"),
+            symbol(",@"): symbol("unquote-splicing"),
+        }
+
+    def process_token(self, ttype, token):
+        ## pylint: disable=too-many-branches
+        ## ugly, but the quickest to write
+        if ttype == self.scanner.T_SYM:
+            self.add(symbol(token))
+        elif ttype == self.scanner.T_LPAR:
+            self.stack.append(Queue())
+        elif ttype == self.scanner.T_RPAR:
+            assert self.stack  ## Scanner checks this
+            q = self.stack.pop()
+            l = self.filter(q.head())
+            if not self.stack:
+                self.callback(l)
+            else:
+                self.add(l)
+        elif ttype in (
+            self.scanner.T_INT,
+            self.scanner.T_REAL,
+            self.scanner.T_STR,
+        ):
+            self.add(token)
+        elif ttype == self.scanner.T_TICK:
+            self.add(symbol("'"))
+        elif ttype == self.scanner.T_BACKTICK:
+            self.add(symbol("`"))
+        elif ttype == self.scanner.T_COMMA:
+            self.add(symbol(","))
+        elif ttype == self.scanner.T_COMMA_AT:
+            self.add(symbol(",@"))
+        elif ttype == self.scanner.T_EOF:
+            assert not self.stack  ## Scanner checks this
+        else:
+            raise RuntimeError((ttype, token))
+
+    def add(self, x):
+        if not self.stack:
+            raise SyntaxError(f"expected '(' got {x!r}")
+        self.stack[-1].enqueue(x)
+
+    def filter(self, sexpr):
+        ## pylint: disable=no-self-use
+        "process ' ` , ,@"
+        q = Queue()
+
+        ## NB we know this is a well-formed list
+        while sexpr is not EL:
+            elt, sexpr = splitcar(sexpr)
+            if isinstance(elt, Symbol) and elt in self.q_map:
+                elt, sexpr = self.process_syms(elt, sexpr)
+            q.enqueue(elt)
+        return q.head()
+
+    def process_syms(self, elt, sexpr):
+        replacement = self.q_map[elt]
+        if sexpr is EL:
+            raise SyntaxError(f"got {elt!r} at end of list")
+        quoted, sexpr = splitcar(sexpr)
+        if isinstance(quoted, Symbol) and quoted in self.q_map:
+            quoted, sexpr = self.process_syms(quoted, sexpr)
+        elt = cons(replacement, cons(quoted, EL))
+        return elt, sexpr
+
+
+## }}}
+## {{{ high level parsing routines
+
+
+def parse(text, callback):
+    p = Parser(callback)
+    p.feed(text)
+    p.feed(None)
+
+
+def execute(text):
+    results = []
+
+    def callback(sexpr):
+        results.append(leval(sexpr))
+
+    parse(text, callback)
+    return results
+
+
+def load(filename, callback=None):
+    if os.path.isabs(filename):
+        path = filename
+    else:
+        for d in ["", os.path.dirname(__file__)] + sys.path:
+            path = os.path.join(d, filename)
+            if os.path.isfile(path):
+                break
+        else:
+            raise FileNotFoundError(filename)
+    with open(path, "r", encoding=locale.getpreferredencoding()) as fp:
+        if callback:
+            parse(fp.read(), callback)
+        else:
+            execute(fp.read())
 
 
 ## }}}
