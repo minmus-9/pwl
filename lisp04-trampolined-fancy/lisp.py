@@ -513,11 +513,17 @@ class Scanner:
             self.s_map[self.state](ch)
 
     def push(self, ttype):
-        t = "".join(self.token)
-        self.token.clear()
+        l = self.token
+        if l:
+            t = "".join(l)
+            l.clear()
+        elif ttype == self.T_SYM:
+            return
+        else:
+            t = None
         if ttype == self.T_SYM:
-            if not t:
-                return
+            if t[0] not in "0123456789.-+":
+                return self.callback(ttype, t)
             try:
                 t = int(t, 0)
                 ttype = self.T_INT
