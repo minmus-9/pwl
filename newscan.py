@@ -57,13 +57,14 @@ class Scanner:
         self.parens = []
         self.cont = self.k_sym
         self.callback = callback
+        ## XXX ascii-specific
         for i in range(256):
             self.lut.setdefault(chr(i), self.token.append)
 
     def feed(self, text):
         if text is None:
             if self.parens:
-                raise SyntaxError(f"eof expecting {self.parens[-1]!r}")
+                raise SyntaxError(f"eof expecting {self.parens.pop()!r}")
             self.push(self.T_SYM)
             self.push(self.T_EOF)
         else:
@@ -84,11 +85,9 @@ class Scanner:
         elif ttype == self.T_SYM:
             return
         else:
-            t = None
-        if ttype == self.T_SYM:
-            if t[0] not in "0123456789-.+":
-                self.callback(ttype, t)
-                return
+            self.callback(ttype, None)
+            return
+        if ttype == self.T_SYM and t[0] in "0123456789-.+":
             try:
                 t = int(t, 0)
                 ttype = self.T_INT
@@ -104,9 +103,7 @@ class Scanner:
         return self.lut[ch](ch)
 
     def k_comment(self, ch):
-        if ch in "\n\r":
-            return self.k_sym
-        return None
+        return self.k_sym if ch in "\n\r" else self.k_comment
 
     def k_quote(self, ch):
         if ch == "\\":
@@ -205,19 +202,28 @@ class Scanner:
 
 
 def main():
-    import sys
-    sys.path.insert(0, "lisp04-trampolined-fancy/")
-    from lisp import Scanner as Scannerx
+    import time  ## pylint: disable=import-outside-toplevel
 
     s = Scanner(lambda *_: print(_))
+    n = 1
     s = Scanner(lambda *_: None)
-    import time
-    n = 20000
+    n = 10000
     src = """
         (add 1 2.1); comment
         (error "abc")
-        (let ([x 1] [y 2]) `,(add x y ,@'()))
-        (define c (call/cc (lambda (cc) cc)))
+        (let ([x 1] [y 2]) `,(add x y ,@()))
+        (define !1 (lambda (n)
+            (if
+                (define n! 1)
+                ()
+                ((lambda (c _ _)                ;; huh. gotta love it!
+                    (if (lt? n 2) n! (c c)))    ;; misleading formatting++
+                    (call/cc (lambda (cc) cc))
+                    (set! n! (mul n! n))
+                    (set! n (sub n 1))
+                )
+            )
+        ))
     """
     b = n * len(src)
     t0 = time.time()
