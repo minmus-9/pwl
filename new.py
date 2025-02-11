@@ -21,6 +21,11 @@
 ## pylint: disable=invalid-name
 ## XXX pylint: disable=missing-docstring
 
+import locale
+import os
+import sys
+import traceback
+
 
 ## {{{ basics
 
@@ -538,13 +543,6 @@ class Scanner:
 
 
 class Parser:
-    Q_MAP = {
-        "'": symbol("quote"),
-        "`": symbol("quasiquote"),
-        ",": symbol("unquote"),
-        ",@": symbol("unquote-splicing"),
-    }
-
     def __init__(self, callback):
         self.callback = callback
         self.stack = Stack()
@@ -601,8 +599,15 @@ class Parser:
         return ret
 
     def set_up_quote(self, s):
-        s = self.Q_MAP[s]
-        self.qstack.append(s)
+        if s == "'":
+            t = symbol("quote")
+        elif s == ",":
+            t = symbol("unquote")
+        elif s == ",@":
+            t = symbol("unquote-splicing")
+        elif s == "`":
+            t = symbol("quasiquote")
+        self.qstack.append(t)
 
 
 ## }}}
@@ -643,11 +648,69 @@ def load(filename, callback=None):
 
 
 ## }}}
+## {{{ repl and main
+
+
+def repl(callback):
+    try:
+        import readline as _  ## pylint: disable=import-outside-toplevel
+    except ImportError:
+        pass
+
+    ## pylint: disable=unused-variable
+    p, rc, stop = Parser(callback), 0, False
+
+    def feed(x):
+        nonlocal p, rc, stop
+        try:
+            p.feed(x)
+        except SystemExit as exc:
+            stop, rc = True, exc.args[0]
+        except:  ## pylint: disable=bare-except
+            p = Parser(callback)
+            traceback.print_exception(*sys.exc_info())
+
+    while not stop:
+        try:
+            line = input("lisp> ") + "\n"
+        except (EOFError, KeyboardInterrupt):
+            feed(None)
+            break
+        feed(line)
+    print("\nbye")
+    return rc
+
+
+def main(force_repl=False):
+    def callback(sexpr):
+        try:
+            value = leval(sexpr)
+        except SystemExit:
+            raise
+        except:
+            print("Offender (pyth):", sexpr)
+            print("Offender (lisp):", stringify(sexpr), "\n")
+            raise
+        if value is not EL:
+            print(stringify(value))
+
+    stop = True
+    for filename in sys.argv[1:]:
+        if filename == "-":
+            stop = False
+            break
+        load(filename, callback=callback)
+        stop = True
+    if force_repl or not stop:
+        raise SystemExit(repl(callback))
+
+
+## }}}
 
 
 def main():
     p = Parser(print)
-    p.feed("""
+    p.feed(r"""
     (add 1 2 "thr\nee")
     (add `,1 ,@'(2 3.14))
     """)
