@@ -58,7 +58,7 @@
 (def (!4 n)
      (define n! 1)
      (def (f k) (set! n! (mul n! k)))
-     (for f 1 n 1)
+     (for f 2 (add n 1) 1)
      n!
 )
 
