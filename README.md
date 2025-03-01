@@ -103,7 +103,10 @@ GPL license header):
 |lisp04-trampolined-fancy |Add FFI, quasiquote and friends, optimizations       |1700|1250|2.53|
 |lisp05-recursive-fast |Recursive lisp with stdlib built in, under 1k LOC       |1000| 800|0.84|
 |lisp06-recursive-fancy |Recursive lisp with stdlib built in, FFI, quasiquote   |1250|1000|0.86|
-|lisp07-unsafe |lisp06-recursive-fancy with all error checks removed            |1200| 950|0.52|
+|lisp07-unsafe |lisp06-recursive-fancy with all error checks removed (TOY!)     |1200| 950|0.52|
+|lisp08-fast-lisp04 |From the pwl04 repo, incl. 680 line runtime lib            |2350|1850|1.55|
+|lisp09-register |A fast register-based version, SICP Chap. 5, 750 line runtime |2500|2050|0.67|
+|lisp10-register-oo |Same as lisp09-register but class-based                    |2500|2050|0.71|
 
 The silly benchmark lives in the file `bench.lisp`. FWIW lisp03-trampolined
 is slower partly because (cond) is implemented in terms of (if) and
@@ -112,7 +115,7 @@ additional primitives and special forms which is why they're so much faster.
 
 All of the implementations have the following limitations:
 
-- No tail-call optimization
+- No tail-call optimization except for the register-based ones (9 and 10)
 - Syntax and other errors do not include lisp source line numbers
 - The python garbage collector is the lisp GC
 
@@ -286,6 +289,30 @@ can corrupt the internal state of the lisp engine with typos and whatnot!
 This is the fastest version I've made so far.
 
 ---
+### `lisp08-fast-lisp04`
+
+Contains improvements and a lot of optimizations over lisp04. I used this
+version while reading SICP until I got to chapter 5 and had to implement the
+register-based versions. The (good?) optimizations from here were used in
+those as well, making them the fastest (serious) versions so far.
+
+---
+### `lisp09-register`
+
+Straight outta SICP chapter 5. Turns out to be faster which is great. Well,
+faster after you tweak it for speed (mostly avoiding function calls like the
+plague and optimizing the trampoline).
+
+---
+### `lisp10-register-oo`
+
+If you basically put the handful of globals into an object and mod the
+trampoline to pass this context around to everyone, you get this OO version
+that supports multiple independent execution contexts (you could implement
+comms between contexts using FFI). This is nice for threads but is about
+10% slower than lisp09-register.
+
+---
 ## Notes on the representation of ()...
 
 Initially, it seemed natural to use [] for the empty list. Unfortunately,
@@ -318,7 +345,8 @@ as much as it's a thread in my github-hosted pensieve.
 
 Having said that, I think there might be some cool things you could do
 with a python-with-lisp. I wouldn't mind seeing it evolve into something
-that's actually useful (in addition to being a "how cps works" demo).
+that's actually useful (in addition to being a "how cps works" demo and
+"my first sicp").
 
 This code is released under the GPLv3:
 
