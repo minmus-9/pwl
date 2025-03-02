@@ -931,7 +931,6 @@ def k_leval(ctx):
     elif t is Lambda:
         ctx.argl = EL
         return x
-
     else:
         ctx.val = x
         return ctx.cont
@@ -1227,7 +1226,7 @@ def op_setbang(ctx):
         if l is not EL:
             raise TypeError()
     except TypeError():
-        raise SyntaxError("expected 2 args")
+        raise SyntaxError("expected 2 args") from None
     if sym.__class__ is not Symbol:
         raise SyntaxError(f"expected symbol, got {sym!r}")
     ctx.push(sym)
@@ -1469,7 +1468,7 @@ def op_do(ctx):
         while x is not EL:
             ctx.val, x = x
     except TypeError:
-        raise SyntaxError(f"expected list, got {x!r}")
+        raise SyntaxError(f"expected list, got {x!r}") from None
     return ctx.cont
 
 
