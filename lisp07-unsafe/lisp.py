@@ -326,7 +326,7 @@ def is_atom(x):
 
 
 def eq(x, y):
-    return is_atom(x) and x is y
+    return x is y
 
 
 ## }}}

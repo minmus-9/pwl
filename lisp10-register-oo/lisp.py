@@ -156,34 +156,25 @@ class Environment:
 
     def __init__(self, ctx, params, args, parent):
         self.p = parent
-        self.t = {}
-        self.bind(ctx, params, args)
-
-    def bind(self, ctx, params, args):
-        t = self.t
+        t = self.t = {}
         v = ctx.symbol("&")
-        variadic = False
-        while params is not EL:
-            if not isinstance(params, list):
-                raise TypeError(f"expected param list, got {params!r}")
-            p, params = params
-            if not isinstance(p, Symbol):
-                raise TypeError(f"expected param symbol, got {p!r}")
-            if p is v:
-                variadic = True
-            elif variadic:
-                if params is not EL:
-                    raise SyntaxError("extra junk after '&'")
-                t[p] = args
-                return
-            elif isinstance(args, list):
-                t[p], args = args
-            elif args is EL:
-                raise SyntaxError("not enough args")
-            else:  ## args is not a list
-                raise TypeError(f"expected arg list, got {args!r}")
-        if variadic:
-            raise SyntaxError("params ends with '&'")
+        try:
+            while params is not EL:
+                p, params = params
+                if p.__class__ is not Symbol:
+                    raise SyntaxError(f"expected param symbol, got {p!r}")
+                if p is v:
+                    p, params = params
+                    if params is not EL:
+                        raise SyntaxError("extra junk after '&'")
+                    t[p] = args
+                    return
+                else:
+                    t[p], args = args
+        except TypeError:
+            if args is EL:
+                raise SyntaxError("not enough args") from None
+            raise TypeError(f"expected list") from None
         if args is not EL:
             raise SyntaxError("too many args")
 
@@ -325,7 +316,7 @@ class Lambda:
 
     def __call__(self, ctx):
         p = ctx.env if self.special else self.e
-        ctx.env = ctx.environment(self.p, ctx.argl, p)
+        ctx.env = Environment(ctx, self.p, ctx.argl, p)
         ctx.exp = self.b
         return k_leval
 
@@ -379,7 +370,7 @@ class Context:
 
         self.symbol = SymbolTable().symbol
 
-        self.g = self.environment(EL, EL, SENTINEL)
+        self.g = Environment(self, EL, EL, SENTINEL)
         for k, v in GLOBALS.items():
             self.g.set(self.symbol(k), v)
 
@@ -410,12 +401,6 @@ class Context:
 
     ## }}}
     ## {{{ factories
-
-    def continuation(self, cont):
-        return Continuation(self, cont)
-
-    def environment(self, params, args, parent):
-        return Environment(self, params, args, parent)
 
     def parser(self, callback):
         return Parser(self, callback)
@@ -1396,7 +1381,7 @@ def op_callcc(ctx):
     x = ctx.unpack1()
     if not callable(x):
         raise TypeError(f"expected callable, got {x!r}")
-    ctx.argl = [ctx.continuation(ctx.cont), EL]
+    ctx.argl = [Continuation(ctx, ctx.cont), EL]
     return x
 
 
