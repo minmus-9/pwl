@@ -2,6 +2,8 @@
 
 ## Introduction
 
+Another LISP writtem in Python? No, another *ten* Python LISPs!
+
 PWL is a set of lisp interpreters I wrote to learn how to implement and
 use LISP. Each one is Python 3.x (even works on Rocky8) and builds on the
 previous one. I created this code for a number of additional reasons:
@@ -36,6 +38,9 @@ make sicp   ## run some sicp code for sanity checking
 make bench  ## run bench.lisp
 make run    ## run the repl
 ```
+
+There is an examples/ directory too, but some of them only work with
+certain of the implementations.
 
 ---
 ## The Language
@@ -104,9 +109,9 @@ GPL license header):
 |lisp05-recursive-fast |Recursive lisp with stdlib built in, under 1k LOC       |1000| 800|0.84|
 |lisp06-recursive-fancy |Recursive lisp with stdlib built in, FFI, quasiquote   |1250|1000|0.86|
 |lisp07-unsafe |lisp06-recursive-fancy with all error checks removed (TOY!)     |1200| 950|0.52|
-|lisp08-fast-lisp04 |From the pwl04 repo, incl. 680 line runtime lib            |2350|1850|1.55|
+|lisp08-fast-lisp04 |From the pwl04 repo, incl. 700 line runtime lib            |2350|1850|1.55|
 |lisp09-register |A fast register-based version, SICP Chap. 5, 750 line runtime |2500|2050|0.67|
-|lisp10-register-oo |Same as lisp09-register but class-based                    |2500|2050|0.71|
+|lisp10-register-oo |Same as lisp09-register but class-based                    |2500|2050|0.69|
 
 The silly benchmark lives in the file `bench.lisp`. FWIW lisp03-trampolined
 is slower partly because (cond) is implemented in terms of (if) and
@@ -309,8 +314,7 @@ plague and optimizing the trampoline).
 If you basically put the handful of globals into an object and mod the
 trampoline to pass this context around to everyone, you get this OO version
 that supports multiple independent execution contexts (you could implement
-comms between contexts using FFI). This is nice for threads but is about
-10% slower than lisp09-register.
+comms between contexts using FFI).
 
 ---
 ## Notes on the representation of ()...
