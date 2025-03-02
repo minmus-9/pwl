@@ -89,7 +89,7 @@ class Symbol:
 
 
 def symcheck(x):
-    if isinstance(x, Symbol):
+    if x.__class__ is Symbol:
         return x
     raise SyntaxError(f"expected symbol, got {x!r}")
 
@@ -110,7 +110,7 @@ class SymbolTable:
 
 
 def is_atom(x):
-    return isinstance(x, Symbol) or x is EL or x is T
+    return x.__class__ is Symbol or x is EL or x is T
 
 
 def eq(x, y):
@@ -122,7 +122,7 @@ def eq(x, y):
 
 
 def listcheck(x):
-    if isinstance(x, list):
+    if x.__class__ is list:
         return x
     raise TypeError(f"expected list, got {x!r}")
 
@@ -157,7 +157,7 @@ class Environment:
     def __init__(self, ctx, params, args, parent):
         self.p = parent
         t = self.t = {}
-        v = ctx.symbol("&")
+        v = ctx.v
         try:
             while params is not EL:
                 p, params = params
@@ -169,17 +169,16 @@ class Environment:
                         raise SyntaxError("extra junk after '&'")
                     t[p] = args
                     return
-                else:
-                    t[p], args = args
+                t[p], args = args
         except TypeError:
             if args is EL:
                 raise SyntaxError("not enough args") from None
-            raise TypeError(f"expected list") from None
+            raise TypeError("expected list") from None
         if args is not EL:
             raise SyntaxError("too many args")
 
     def get(self, sym):
-        if not isinstance(sym, Symbol):
+        if sym.__class__ is not Symbol:
             raise TypeError(f"expected symbol, got {sym!r}")
         e = self
         while e is not SENTINEL:
@@ -190,12 +189,12 @@ class Environment:
         raise NameError(str(sym))
 
     def set(self, sym, value):
-        if not isinstance(sym, Symbol):
+        if sym.__class__ is not Symbol:
             raise TypeError(f"expected symbol, got {sym!r}")
         self.t[sym] = value
 
     def setbang(self, sym, value):
-        if not isinstance(sym, Symbol):
+        if sym.__class__ is not Symbol:
             raise TypeError(f"expected symbol, got {sym!r}")
         e = self
         while e is not SENTINEL:
@@ -291,7 +290,12 @@ class Continuation:
         self.s = ctx.save()
 
     def __call__(self, ctx):
-        x = ctx.unpack1()
+        try:
+            x, a = ctx.argl
+            if a is not EL:
+                raise TypeError()
+        except TypeError:
+            raise SyntaxError("expected one arg") from None
         ctx.restore(self.s)
         ctx.val = x
         return self.c
@@ -359,6 +363,7 @@ class Context:
         "val",
         "symbol",
         "g",
+        "v",
     )
 
     def __init__(self):
@@ -369,6 +374,8 @@ class Context:
         self.s = EL
 
         self.symbol = SymbolTable().symbol
+
+        self.v = self.symbol("&")
 
         self.g = Environment(self, EL, EL, SENTINEL)
         for k, v in GLOBALS.items():
@@ -466,13 +473,16 @@ class Context:
     def unpack(self, n):
         args = self.argl
         ret = []
-        for _ in range(n):
+        add = ret.append
+        try:
+            for _ in range(n):
+                x, args = args
+                add(x)
+        except TypeError:
             if args is EL:
-                raise SyntaxError("not enough args")
-            if not isinstance(args, list):
-                raise SyntaxError(f"expected list, got {args!r}")
-            x, args = args
-            ret.append(x)
+                raise SyntaxError("not enough args") from None
+            if args.__class__ is not list:
+                raise SyntaxError(f"expected list, got {args!r}") from None
         if args is not EL:
             raise SyntaxError("too many args")
         return ret
@@ -481,7 +491,7 @@ class Context:
         args = self.argl
         if args is EL:
             raise SyntaxError("need one arg")
-        if not isinstance(args, list):
+        if args.__class__ is not list:
             raise TypeError(f"expected list, got {args!r}")
         ret, args = args
         if args is not EL:
@@ -490,39 +500,29 @@ class Context:
 
     def unpack2(self):
         args = self.argl
-        if args is EL:
-            raise SyntaxError("need two args")
-        if not isinstance(args, list):
-            raise TypeError(f"expected list, got {args!r}")
-        x, args = args
-        if args is EL:
-            raise SyntaxError("not enough args")
-        if not isinstance(args, list):
-            raise TypeError(f"expected list, got {args!r}")
-        y, args = args
-        if args is not EL:
-            raise SyntaxError("too many args")
+        try:
+            x, args = args
+            y, args = args
+            if args is not EL:
+                raise SyntaxError("too many args")
+        except TypeError:
+            if args is EL:
+                raise SyntaxError("not enough args") from None
+            raise SyntaxError("expected arg list") from None
         return x, y
 
     def unpack3(self):
         args = self.argl
-        if args is EL:
-            raise SyntaxError("need three args")
-        if not isinstance(args, list):
-            raise TypeError(f"expected list, got {args!r}")
-        x, args = args
-        if args is EL:
-            raise SyntaxError("not enough args")
-        if not isinstance(args, list):
-            raise TypeError(f"expected list, got {args!r}")
-        y, args = args
-        if args is EL:
-            raise SyntaxError("not enough args")
-        if not isinstance(args, list):
-            raise TypeError(f"expected list, got {args!r}")
-        z, args = args
-        if args is not EL:
-            raise SyntaxError("too many args")
+        try:
+            x, args = args
+            y, args = args
+            z, args = args
+            if args is not EL:
+                raise SyntaxError("too many args")
+        except TypeError:
+            if args is EL:
+                raise SyntaxError("not enough args") from None
+            raise TypeError("expected arg list") from None
         return x, y, z
 
     ## }}}
@@ -827,7 +827,7 @@ class Parser:
         self.stack[-1].enqueue(self.quote_wrap(x))
 
     def quote_wrap(self, x):
-        while self.qstack and isinstance(self.qstack[-1], Symbol):
+        while self.qstack and self.qstack[-1].__class__ is Symbol:
             x = [self.qstack.pop(), [x, EL]]
         return x
 
@@ -910,9 +910,9 @@ def k_leval(ctx):
 
     if t is list:
         op, args = x
-        if not (isinstance(args, list) or args is EL):
+        if not (args.__class__ is list or args is EL):
             raise SyntaxError(f"expected arg list, got {args!r}")
-        if isinstance(op, Symbol):
+        if op.__class__ is Symbol:
             ## inline env.get
             e = ctx.env
             while e is not SENTINEL:
@@ -923,10 +923,12 @@ def k_leval(ctx):
                     e = e.p
             else:
                 raise NameError(str(op)) from None
-
-            if getattr(op, "special", False):
-                ctx.argl = args
-                return op
+            try:
+                if op.special:
+                    ctx.argl = args
+                    return op
+            except AttributeError:
+                pass
     elif t is Lambda:
         op = x
         args = EL
@@ -938,10 +940,13 @@ def k_leval(ctx):
     ctx.s = [args, [ctx.env, [ctx.cont, ctx.s]]]
 
     ## list or sym lookup
-    if callable(op):
+    try:
+        _ = op.__call__
         ctx.val = op
         return k_leval_proc_done
-    if not isinstance(op, list):
+    except AttributeError:
+        pass
+    if op.__class__ is not list:
         raise SyntaxError(f"expected list or proc, got {op!r}")
     ctx.cont = k_leval_proc_done
     ctx.exp = op
@@ -950,8 +955,6 @@ def k_leval(ctx):
 
 def k_leval_proc_done(ctx):
     proc = ctx.val
-    if not callable(proc):
-        raise TypeError(f"expected callable, got {proc!r}")
     ## pop argl and env
     ctx.argl, s = ctx.s  ## NB argl is EL or a pair
     ctx.env, s = s
@@ -972,11 +975,11 @@ def k_leval_proc_done(ctx):
     ctx.exp, args = ctx.argl
     if args is EL:
         ctx.cont = k_leval_last
-    elif not isinstance(args, list):
-        raise TypeError(f"expected arg list, got {args!r}")
-    else:
+    elif args.__class__ is list:
         s = [args, s]
         ctx.cont = k_leval_next
+    else:
+        raise TypeError(f"expected arg list, got {args!r}")
     ctx.s = s
     return k_leval
 
@@ -991,12 +994,12 @@ def k_leval_next(ctx):
     ctx.exp, args = args
     if args is EL:
         ctx.cont = k_leval_last
-    elif not isinstance(args, list):
-        raise TypeError(f"expected arg list, got {args!r}")
-    else:
+    elif args.__class__ is list:
         ## push args
         s = [args, s]
         ctx.cont = k_leval_next
+    else:
+        raise TypeError(f"expected arg list, got {args!r}")
     ctx.s = s
     return k_leval
 
@@ -1016,10 +1019,14 @@ def k_leval_last(ctx):
     proc, s = s
     ## pop cont
     ctx.cont, ctx.s = s
-    if proc.ffi:
-        ctx.exp = proc
-        return do_ffi
-    return proc
+    try:
+        _ = proc.__call__
+        if proc.ffi:
+            ctx.exp = proc
+            return do_ffi
+        return proc
+    except AttributeError:
+        raise SyntaxError("expected callable, got {proc!r}") from None
 
 
 ## }}}
@@ -1175,7 +1182,15 @@ def k_op_define(ctx):
 
 @spcl("if")
 def op_if(ctx):
-    ctx.exp, c, a = ctx.unpack3()
+    l = ctx.argl
+    try:
+        ctx.exp, l = l
+        c, l = l
+        a, l = l
+        if l is not EL:
+            raise TypeError()
+    except TypeError:
+        ctx.unpack3()  ## do thorough checking for the specific error
     ctx.push_ce()
     ctx.push([c, a])
     ctx.cont = k_op_if
@@ -1203,8 +1218,17 @@ def op_quote(ctx):
 
 @spcl("set!")
 def op_setbang(ctx):
-    sym, value = ctx.unpack2()
-    ctx.push(symcheck(sym))
+    ## this one seems to like being optimized
+    try:
+        sym, l = ctx.argl
+        value, l = l
+        if l is not EL:
+            raise TypeError()
+    except TypeError():
+        raise SyntaxError("expected 2 args")
+    if sym.__class__ is not Symbol:
+        raise SyntaxError(f"expected symbol, got {sym!r}")
+    ctx.push(sym)
     ctx.push_ce()
     ctx.cont = k_op_setbang
     ctx.exp = value
@@ -1215,7 +1239,8 @@ def k_op_setbang(ctx):
     ctx.pop_ce()
     sym = ctx.pop()
     ctx.env.setbang(sym, ctx.val)
-    return ctx.go(EL)
+    ctx.val = EL
+    return ctx.cont
 
 
 @spcl("special")
@@ -1265,7 +1290,7 @@ def op_quasiquote(ctx):
 
 def qq_(ctx):
     form = ctx.exp
-    if not isinstance(form, list):
+    if form.__class__ is not list:
         return ctx.go(form)
     app = form[0]
     if eq(app, ctx.symbol("quasiquote")):
@@ -1286,11 +1311,11 @@ def qq_(ctx):
 
 def k_qq_setup(ctx, form):
     elt, form = form
-    if not (isinstance(form, list) or form is EL):
+    if not (form.__class__ is list or form is EL):
         raise TypeError(f"expected list, got {form!r}")
     ctx.push(form)
     ctx.push_ce()
-    if isinstance(elt, list) and eq(elt[0], ctx.symbol("unquote-splicing")):
+    if elt.__class__ is list and elt[0] is ctx.symbol("unquote-splicing"):
         ctx.argl = elt
         _, ctx.exp = ctx.unpack2()
         ctx.cont = k_qq_spliced
@@ -1309,7 +1334,7 @@ def k_qq_spliced(ctx):
             return k_qq_finish
         return k_qq_setup(ctx, form)
     while value is not EL:
-        if not isinstance(value, list):
+        if value.__class__ is not list:
             raise TypeError(f"expected list, got {value!r}")
         elt, value = value
         if value is EL:
@@ -1347,13 +1372,27 @@ def k_qq_finish(ctx):
 
 
 def unary(ctx, f):
-    x = ctx.unpack1()
+    a = ctx.argl
+    if a is EL:
+        raise SyntaxError("expected 1 arg")
+    x, a = a
+    if a is not EL:
+        raise SyntaxError("too many args")
     ctx.val = f(x)
     return ctx.cont
 
 
 def binary(ctx, f):
-    x, y = ctx.unpack2()
+    try:
+        a = ctx.argl
+        if a is EL:
+            raise SyntaxError("not enough args")
+        x, a = a
+        y, a = a
+        if a is not EL:
+            raise SyntaxError("too many args")
+    except TypeError:
+        raise TypeError("expected 2 args") from None
     ctx.val = f(x, y)
     return ctx.cont
 
@@ -1423,10 +1462,11 @@ def op_div(ctx):
 def op_do(ctx):
     x = ctx.argl
     ctx.val = EL
-    while x is not EL:
-        if not isinstance(x, list):
-            raise SyntaxError(f"expected list, got {x!r}")
-        ctx.val, x = x
+    try:
+        while x is not EL:
+            ctx.val, x = x
+    except TypeError:
+        raise SyntaxError(f"expected list, got {x!r}")
     return ctx.cont
 
 
@@ -1467,7 +1507,7 @@ def op_eval(ctx):
         if args is not EL:
             raise TypeError("too many args")
 
-    if isinstance(x, str):
+    if x.__class__ is str:
         l = []
         ctx.parse(x, l.append)
         x = l[-1] if l else EL

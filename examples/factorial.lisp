@@ -247,6 +247,12 @@
     )
 )
 
+(def (!19 n)
+    ((lambda (f) (f f 1 n))
+        (lambda (f p k) (if (lt? k 2) p (f f (mul p k) (sub k 1))))
+    )
+)
+
 (def (!bench)
     (define reps 5)
     (define n 400)
@@ -269,5 +275,6 @@
     (print '!16 (timeit (lambda (_) (!16 n)) reps))
     (print '!17 (timeit (lambda (_) (!17 n)) reps))
     (print '!18 (timeit (lambda (_) (!18 n)) reps))
+    (print '!19 (timeit (lambda (_) (!19 n)) reps))
 )
 (timeit (lambda (_) (!bench)) 1)
