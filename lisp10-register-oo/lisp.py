@@ -923,6 +923,7 @@ def k_leval(ctx):
                     e = e.p
             else:
                 raise NameError(str(op)) from None
+            ## save a getattr() call
             try:
                 if op.special:
                     ctx.argl = args
@@ -955,6 +956,12 @@ def k_leval(ctx):
 
 def k_leval_proc_done(ctx):
     proc = ctx.val
+    ## save a callable() call
+    try:
+        _ = proc.__call__
+    except AttributeError:
+        raise SyntaxError("expected callable, got {proc!r}") from None
+
     ## pop argl and env
     ctx.argl, s = ctx.s  ## NB argl is EL or a pair
     ctx.env, s = s
@@ -969,9 +976,9 @@ def k_leval_proc_done(ctx):
         ctx.cont, ctx.s = s
         return proc
 
-    ## inline old leval_setup() to avoid function call
     ## push proc, SENTINEL, env
     s = [ctx.env, [SENTINEL, [proc, s]]]
+
     ctx.exp, args = ctx.argl
     if args is EL:
         ctx.cont = k_leval_last
@@ -990,7 +997,7 @@ def k_leval_next(ctx):
     ctx.env, s = s
     ## push val and r.env
     s = [ctx.env, [ctx.val, s]]
-    ## inline old leval_setup() to avoid function call
+
     ctx.exp, args = args
     if args is EL:
         ctx.cont = k_leval_last
@@ -1019,14 +1026,10 @@ def k_leval_last(ctx):
     proc, s = s
     ## pop cont
     ctx.cont, ctx.s = s
-    try:
-        _ = proc.__call__
-        if proc.ffi:
-            ctx.exp = proc
-            return do_ffi
-        return proc
-    except AttributeError:
-        raise SyntaxError("expected callable, got {proc!r}") from None
+    if proc.ffi:
+        ctx.exp = proc
+        return do_ffi
+    return proc
 
 
 ## }}}
