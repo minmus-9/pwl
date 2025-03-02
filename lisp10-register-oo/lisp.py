@@ -910,8 +910,6 @@ def k_leval(ctx):
 
     if t is list:
         op, args = x
-        if not (args.__class__ is list or args is EL):
-            raise SyntaxError(f"expected arg list, got {args!r}")
         if op.__class__ is Symbol:
             ## inline env.get
             e = ctx.env
@@ -931,8 +929,9 @@ def k_leval(ctx):
             except AttributeError:
                 pass
     elif t is Lambda:
-        op = x
-        args = EL
+        ctx.argl = EL
+        return x
+
     else:
         ctx.val = x
         return ctx.cont
@@ -1375,25 +1374,22 @@ def k_qq_finish(ctx):
 
 
 def unary(ctx, f):
-    a = ctx.argl
-    if a is EL:
-        raise SyntaxError("expected 1 arg")
-    x, a = a
-    if a is not EL:
-        raise SyntaxError("too many args")
+    try:
+        x, a = ctx.argl
+        if a is not EL:
+            raise TypeError()
+    except TypeError:
+        raise SyntaxError("expected 1 arg") from None
     ctx.val = f(x)
     return ctx.cont
 
 
 def binary(ctx, f):
     try:
-        a = ctx.argl
-        if a is EL:
-            raise SyntaxError("not enough args")
-        x, a = a
+        x, a = ctx.argl
         y, a = a
         if a is not EL:
-            raise SyntaxError("too many args")
+            raise TypeError()
     except TypeError:
         raise TypeError("expected 2 args") from None
     ctx.val = f(x, y)
@@ -1411,10 +1407,11 @@ def op_apply(ctx):
 
 @glbl("atom?")
 def op_atom(ctx):
-    def f(x):
-        return T if is_atom(x) else EL
+    return unary(ctx, op_atom_f)
 
-    return unary(ctx, f)
+
+def op_atom_f(x):
+    return T if is_atom(x) else EL
 
 
 @glbl("call/cc")
@@ -1429,20 +1426,22 @@ def op_callcc(ctx):
 
 @glbl("car")
 def op_car(ctx):
-    def f(x):
-        return listcheck(x)[0]
+    return unary(ctx, op_car_f)
 
-    return unary(ctx, f)
+
+def op_car_f(x):
+    return listcheck(x)[0]
 
 
 @glbl("cdr")
 def op_cdr(ctx):
-    def f(x):
-        if x is EL:
-            return x
-        return listcheck(x)[1]
+    return unary(ctx, op_cdr_f)
 
-    return unary(ctx, f)
+
+def op_cdr_f(x):
+    if x is EL:
+        return x
+    return listcheck(x)[1]
 
 
 @glbl("cons")
@@ -1453,12 +1452,13 @@ def op_cons(ctx):
 
 @glbl("div")
 def op_div(ctx):
-    def f(x, y):
-        if isinstance(x, int) and isinstance(y, int):
-            return x // y
-        return x / y
+    return binary(ctx, op_div_f)
 
-    return binary(ctx, f)
+
+def op_div_f(x, y):
+    if isinstance(x, int) and isinstance(y, int):
+        return x // y
+    return x / y
 
 
 @glbl("do")
@@ -1475,20 +1475,22 @@ def op_do(ctx):
 
 @glbl("eq?")
 def op_eq(ctx):
-    def f(x, y):
-        return T if eq(x, y) else EL
+    return binary(ctx, op_eq_f)
 
-    return binary(ctx, f)
+
+def op_eq_f(x, y):
+    return T if eq(x, y) else EL
 
 
 @glbl("equal?")
 def op_equal(ctx):
-    def f(x, y):
-        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
-            raise TypeError(f"expected numbers, got {x!r} {y!r}")
-        return T if x == y else EL
+    return binary(ctx, op_equal_f)
 
-    return binary(ctx, f)
+
+def op_equal_f(x, y):
+    if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+        raise TypeError(f"expected numbers, got {x!r} {y!r}")
+    return T if x == y else EL
 
 
 @glbl("error")
@@ -1541,41 +1543,47 @@ def k_op_exit(ctx):
 @glbl("last")
 def op_last(ctx):
     x = ctx.unpack1()
-    ret = EL
-    while x is not EL:
-        ret, x = x
+    try:
+        ret = EL
+        while x is not EL:
+            ret, x = x
+    except TypeError:
+        raise SyntaxError(f"expected list, got {x!r}") from None
     ctx.val = ret
     return ctx.cont
 
 
 @glbl("lt?")
 def op_lt(ctx):
-    def f(x, y):
-        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
-            raise TypeError(f"expected numbers, got {x!r} and {y!r}")
-        return T if x < y else EL
+    return binary(ctx, op_lt_f)
 
-    return binary(ctx, f)
+
+def op_lt_f(x, y):
+    if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+        raise TypeError(f"expected numbers, got {x!r} and {y!r}")
+    return T if x < y else EL
 
 
 @glbl("mul")
 def op_mul(ctx):
-    def f(x, y):
-        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
-            raise TypeError(f"expected numbers, got {x!r} and {y!r}")
-        return x * y
+    return binary(ctx, op_mul_f)
 
-    return binary(ctx, f)
+
+def op_mul_f(x, y):
+    if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+        raise TypeError(f"expected numbers, got {x!r} and {y!r}")
+    return x * y
 
 
 @glbl("nand")
 def op_nand(ctx):
-    def f(x, y):
-        if not (isinstance(x, int) and isinstance(y, int)):
-            raise TypeError(f"expected integers, got {x!r} and {y!r}")
-        return ~(x & y)
+    return binary(ctx, op_nand_f)
 
-    return binary(ctx, f)
+
+def op_nand_f(x, y):
+    if not (isinstance(x, int) and isinstance(y, int)):
+        raise TypeError(f"expected integers, got {x!r} and {y!r}")
+    return ~(x & y)
 
 
 @glbl("null?")
@@ -1623,28 +1631,31 @@ def k_op_print(ctx):
 
 @glbl("set-car!")
 def op_setcarbang(ctx):
-    def f(x, y):
-        listcheck(x)[0] = y
+    return binary(ctx, op_setcarbang_f)
 
-    return binary(ctx, f)
+
+def op_setcarbang_f(x, y):
+    listcheck(x)[0] = y
 
 
 @glbl("set-cdr!")
 def op_setcdrbang(ctx):
-    def f(x, y):
-        listcheck(x)[1] = y
+    return binary(ctx, op_setcdrbang_f)
 
-    return binary(ctx, f)
+
+def op_setcdrbang_f(x, y):
+    listcheck(x)[1] = y
 
 
 @glbl("sub")
 def op_sub(ctx):
-    def f(x, y):
-        if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
-            raise TypeError(f"expected numbers, got {x!r} and {y!r}")
-        return x - y
+    return binary(ctx, op_sub_f)
 
-    return binary(ctx, f)
+
+def op_sub_f(x, y):
+    if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+        raise TypeError(f"expected numbers, got {x!r} and {y!r}")
+    return x - y
 
 
 @glbl("type")

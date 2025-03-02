@@ -249,7 +249,12 @@
 
 (def (!19 n)
     ((lambda (f) (f f 1 n))
-        (lambda (f p k) (if (lt? k 2) p (f f (mul p k) (sub k 1))))
+        (lambda (f p k)
+            (if (lt? k 2)
+                p
+                (f f (mul p k) (sub k 1))
+            )
+        )
     )
 )
 
