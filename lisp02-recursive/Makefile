@@ -31,6 +31,9 @@ run:
 bench:
 	time $(TFLAG) $(LISP) $(LIBS) ../examples/bench.lisp
 
+fastfac:
+	time $(TFLAG) $(LISP) $(LIBS) ../examples/fastfac.lisp
+
 sicp:
 	$(LISP) $(LIBS) ../examples/sicp.lisp
 

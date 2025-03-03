@@ -28,6 +28,11 @@ bench:
 	    (echo; cd $$d && $(MAKE) PYTHON=$(P) TFLAG=$(TFLAG) $@; echo); \
 	done
 
+fastfac:
+	@for d in lisp[0-9]*/; do \
+	    (echo; cd $$d && $(MAKE) PYTHON=$(P) TFLAG=$(TFLAG) $@; echo); \
+	done
+
 sicp:
 	@for d in lisp[0-9]*/; do \
 	    (echo; cd $$d && $(MAKE) PYTHON=$(P) TFLAG=$(TFLAG) $@; echo); \
