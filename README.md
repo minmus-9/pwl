@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Another LISP writtem in Python? No, another *ten* Python LISPs!
+Another LISP writtem in Python? Hell No! Another *ten* Python LISPs!
 
 PWL is a set of lisp interpreters I wrote to learn how to implement and
 use LISP. Each one is Python 3.x (even works on Rocky8) and builds on the
@@ -15,9 +15,9 @@ previous one. I created this code for a number of additional reasons:
 - Study the feasibility of doing a C port to an embedded system
 
 I have never written a single line of lisp. But now that I've written my
-own version, I will be able to learn it -- without "cheating" and using
-someone else's lisp implementation. Of course, I have to take Python as
-a given to claim that :-)
+own version, I am learning it -- without "cheating" and using someone
+else's lisp implementation. Of course, I have to take Python as a given
+to claim that :-)
 
 This code documents my beginner's journey and I'm releasing it in the
 hope that it will help other beginners absorb what's out there. It took
@@ -118,7 +118,7 @@ is slower partly because (cond) is implemented in terms of (if) and
 (quasiquote). The trampoline overhead is huge. lisp04 through lisp06 implement
 additional primitives and special forms which is why they're so much faster.
 
-All of the implementations have the following limitations:
+All of the implementations have the following properties/limitations:
 
 - No tail-call optimization except for the register-based ones (9 and 10)
 - Syntax and other errors do not include lisp source line numbers
@@ -139,10 +139,8 @@ This is not a software product (yet), so the code duplication is acceptable.
 
 These files all use globals and pure python functions; there are only a few
 classes used in the code. This was done on purpose (a) to facilitate a future
-C port, and (b) to keep things simple and focused. It would be worthwhile to
-do an OO version so that you could have multiple lisp interpreters; this would
-allow its use in hybrid python code libraries, for example. If such a thing
-is even interesting :-)
+C port, and (b) to keep things simple and focused. See lisp10-register-oo/lisp.py
+for an OO version that supports multiple interpreters.
 
 ---
 ### `lisp01-easy`
@@ -238,16 +236,16 @@ In order to understand `lisp03-trampolined`, you need to understand this
 one. Once you understand this one, `lisp03-trampolined` will be
 straightforward. There are a couple of good things in the References section
 at the end. I had to stare at them, write this code, and stare some more
-before it all really clicked.
+before it all really clicked. lisp09 and lisp10 use an optimized trampoline.
 
 ---
 ### `lisp03-trampolined`
 
-This is the final major lisp implementation in the set. It is
-"feature-complete" to me in the sense that it scratches all of the itches I
-listed at the top of this file. The further implementations just add better
+This is the final major lisp implementation in the early history of this repo.
+It is "feature-complete" to me in the sense that it scratches all of the itches
+I listed at the top of this file. The further implementations just add better
 python integration, (quasi)quoting support and the accompanying syntactic
-sugar.
+sugar. Until you get to the fast register-based ones, that is.
 
 Having trampolined and CPS-ed the code, continuations are implemented in a
 couple of dozen lines of really obvious code. Before these code
@@ -261,7 +259,9 @@ The only addition to the language itself is the
 
 Tail-call optimizations are not present in this code because I don't yet know
 how to implement them! I fear that this will be a Big Change to the code, but
-I'm not 100% on that.
+I'm not 100% on that. News flash: lisp09 and lisp10 support TCO at least to
+some extent (I haven't thoroughly explored it yet). See (!19) in
+examples/factorial.lisp for the fastest factorial that uses tail calls.
 
 ---
 ### `lisp04-trampolined-fancy`
@@ -291,7 +291,8 @@ This is `lisp05-recursive-fast` with FFI and quasiquote thrown in.
 
 This is `lisp06-recursive-fancy` with all error checking removed; i.e., you
 can corrupt the internal state of the lisp engine with typos and whatnot!
-This is the fastest version I've made so far.
+This is the fastest version I've made so far. But it is only a toy,
+unfortunately.
 
 ---
 ### `lisp08-fast-lisp04`
@@ -315,6 +316,10 @@ If you basically put the handful of globals into an object and mod the
 trampoline to pass this context around to everyone, you get this OO version
 that supports multiple independent execution contexts (you could implement
 comms between contexts using FFI).
+
+I did a bit of extra tuning on this one to get it faster than lisp09 (which,
+to be fair, could be optimized that same way to get it faster than lisp10
+again).
 
 ---
 ## Notes on the representation of ()...
