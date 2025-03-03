@@ -2020,22 +2020,22 @@ RUNTIME = r"""
 ;; {{{ bitwise ops
 
 ;; bitwise ops from nand
-(def (bnot x)   (nand x x))
-(def (band x y) (bnot (nand x y)))
-(def (bor  x y) (nand (bnot x) (bnot y)))
-(def (bxor x y) (band (nand x y) (bor x y)))
+(define (bnot x)   (nand x x))
+(define (band x y) (bnot (nand x y)))
+(define (bor  x y) (nand (bnot x) (bnot y)))
+(define (bxor x y) (band (nand x y) (bor x y)))
 
 ;; }}}
 ;; {{{ arithmetic
 
-(def (neg x) (sub 0 x))
-(def (add x y) (sub x (neg y)))
+(define (neg x) (sub 0 x))
+(define (add x y) (sub x (neg y)))
 
 ;; oh, and mod
-(def (mod n d) (sub n (mul d (div n d))))
+(define (mod n d) (sub n (mul d (div n d))))
 
 ;; absolute value
-(def (abs x)
+(define (abs x)
     (if
         (lt? x 0)
         (neg x)
@@ -2044,7 +2044,7 @@ RUNTIME = r"""
 )
 
 ;; copysign
-(def (copysign x y)
+(define (copysign x y)
     (if
         (lt? y 0)
         (neg (abs x))
@@ -2053,7 +2053,7 @@ RUNTIME = r"""
 )
 
 ;; (signed) shifts
-(def (lshift x n)
+(define (lshift x n)
     (cond
         ((equal? n 0)   x)
         ((equal? n 1)   (add x x))
@@ -2061,7 +2061,7 @@ RUNTIME = r"""
     )
 )
 
-(def (rshift x n)
+(define (rshift x n)
     (cond
         ((equal? n 0)   x)
         ((equal? n 1)   (div x 2))
@@ -2072,9 +2072,9 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ comparison predicates
 
-(def (le? x y) (if (lt? x y) #t (if (equal? x y) #t ())))
-(def (ge? x y) (not (lt? x y)))
-(def (gt? x y) (lt? y x))
+(define (le? x y) (if (lt? x y) #t (if (equal? x y) #t ())))
+(define (ge? x y) (not (lt? x y)))
+(define (gt? x y) (lt? y x))
 
 ;; }}}
 ;; {{{ and or not
@@ -2107,7 +2107,7 @@ RUNTIME = r"""
     ) (call/cc (lambda (cc) cc)) )
 ))
 
-(def (not x) (if (eq? x ()) #t ()))
+(define (not x) (if (eq? x ()) #t ()))
 
 ;; }}}
 ;; {{{ assert
@@ -2123,7 +2123,7 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ reverse
 
-(def (reverse l)
+(define (reverse l)
     (define r ())
     (define c (call/cc (lambda (cc) cc)))
     (if
@@ -2140,7 +2140,7 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ iter and enumerate
 
-(def (iter lst fin)
+(define (iter lst fin)
     (define item ())
     (define next (lambda ()
         (if
@@ -2156,7 +2156,7 @@ RUNTIME = r"""
     next
 )
 
-(def (enumerate lst fin)
+(define (enumerate lst fin)
     (define index 0)
     (define item fin)
     (define next (lambda ()
@@ -2177,7 +2177,7 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ length
 
-(def (length l)
+(define (length l)
     (define n 0)
     (define c (call/cc (lambda (cc) cc)))
     (if
@@ -2194,7 +2194,7 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ fold, transpose, map
 ;; sicp p.158-165 with interface tweaks
-(def (fold-left f initial sequence)
+(define (fold-left f initial sequence)
     (define r initial)
     (foreach (lambda (elt) (set! r (f elt r))) sequence)
     r
@@ -2202,7 +2202,7 @@ RUNTIME = r"""
 
 (define reduce fold-left)  ;; python nomenclature
 
-(def (fold-right f initial sequence)
+(define (fold-right f initial sequence)
       (fold-left f initial (reverse sequence)))
 
 (define accumulate fold-right)  ;; sicp nomenclature
@@ -2210,12 +2210,12 @@ RUNTIME = r"""
 ;(fold-left  cons () (list 1 4 9))  ;; (9 4 1)    (cons 9 (cons 4 (cons 1 ())))
 ;(fold-right cons () (list 1 4 9))  ;; (1 4 9)    (cons 1 (cons 4 (cons 9 ())))
 
-(def (map1 f lst)
-    (def (g elt r) (cons (f elt) r))
+(define (map1 f lst)
+    (define (g elt r) (cons (f elt) r))
     (fold-right g () lst)
 )
 
-(def (accumulate-n f initial sequences)
+(define (accumulate-n f initial sequences)
     (define r ())
     (define c (call/cc (lambda (cc) cc)))
     (if
@@ -2229,17 +2229,17 @@ RUNTIME = r"""
     )
 )
 
-(def (transpose lists) (accumulate-n cons () lists))
+(define (transpose lists) (accumulate-n cons () lists))
 
-(def (map f & lists)
-    (def (g tuple) (apply f tuple))
+(define (map f & lists)
+    (define (g tuple) (apply f tuple))
     (map1 g (transpose lists))
 )
 
 ;; }}}
 ;; {{{ join
 
-(def (join x y)
+(define (join x y)
     (cond
         ((null? x) y)
         ((null? y) x)
@@ -2251,11 +2251,11 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ queue
 
-(def (queue)
+(define (queue)
     (define h ())
     (define t ())
 
-    (def (dispatch op & args)
+    (define (dispatch op & args)
         (cond
             ((eq? op (quote enqueue))
                 (if
@@ -2315,7 +2315,7 @@ RUNTIME = r"""
 (special let (lambda (__special_let_vdefs__ __special_let_body__)
     (eval (let$ __special_let_vdefs__ __special_let_body__) 1)))
 
-(def (let$ vdefs body)
+(define (let$ vdefs body)
     (define vdecls (transpose vdefs))
     (define vars (car vdecls))
     (define vals (cadr vdecls))
@@ -2328,7 +2328,7 @@ RUNTIME = r"""
 (special let* (lambda (__special_lets_vdefs__ __special_lets_body__)
     (eval (let*$ __special_lets_vdefs__ __special_lets_body__) 1)))
 
-(def (let*$ vdefs body)
+(define (let*$ vdefs body)
     (if
         (null? vdefs)
         body
@@ -2349,22 +2349,22 @@ RUNTIME = r"""
 (special letrec (lambda (__special_letrec_decls__ __special_letrec_body__)
     (eval (letrec$ __special_letrec_decls__ __special_letrec_body__) 1)))
 
-(def (letrec$ decls & body)
+(define (letrec$ decls & body)
     (define names (map1 car decls))
     (define values (map1 cadr decls))
-    (def (declare var) `(define ,var ()))
-    (def (initialize var-value) `(set! ,(car var-value) ,(cadr var-value)))
-    (def (declare-all) (map1 declare names))
-    (def (initialize-all) (map1 initialize decls))
+    (define (declare var) `(define ,var ()))
+    (define (initialize var-value) `(set! ,(car var-value) ,(cadr var-value)))
+    (define (declare-all) (map1 declare names))
+    (define (initialize-all) (map1 initialize decls))
     `((lambda () ( do ,@(declare-all) ,@(initialize-all) ,@body)))
 )
 
 ;; }}}
 ;; {{{ associative table
 
-(def (table compare)
+(define (table compare)
     (define items ())
-    (def (dispatch m & args)
+    (define (dispatch m & args)
         (cond
             ((eq? m 'known) (not (null? (table$find items key compare))))
             ((eq? m 'del) (set! items (table$delete items (car args) compare)))
@@ -2418,7 +2418,7 @@ RUNTIME = r"""
     dispatch
 )
 
-(def (table$find items key compare)
+(define (table$find items key compare)
     (cond
       ((null? items) ())
       ((compare (car (car items)) key) (car items))
@@ -2426,9 +2426,9 @@ RUNTIME = r"""
     )
 )
 
-(def (table$delete items key compare)
+(define (table$delete items key compare)
     (define prev ())
-    (def (helper assoc key)
+    (define (helper assoc key)
         (cond
             ((null? assoc) items)
             ((compare (car (car assoc)) key) (do
@@ -2450,14 +2450,14 @@ RUNTIME = r"""
 ;; {{{ looping: loop, for
 
 ;; call f in a loop forever
-(def (loop f)
+(define (loop f)
     (define c (call/cc (lambda (cc) cc)))
     (f)
     (c c)
 )
 
 ;; call f a given number of times as (f counter)
-(def (for f start stop step)
+(define (for f start stop step)
     (if (lt? step 1) (error "step must be positive") ())
     (define i start)
     (define c (call/cc (lambda (cc) cc)))
@@ -2475,7 +2475,7 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ iterate (compose with itself) a function
 
-(def (iter-func f x0 n)
+(define (iter-func f x0 n)
     (define c (call/cc (lambda (cc) cc)))
     (if
         (lt? n 1)
@@ -2491,7 +2491,7 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ benchmarking
 
-(def (timeit f n)
+(define (timeit f n)
     (define t0 (time 'time))
     (for f 0 n 1)
     (define t1 (time 'time))
@@ -2504,7 +2504,7 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ gcd
 
-(def (gcd x y)
+(define (gcd x y)
     (cond
         ((lt? x y) (gcd y x))
         ((equal? x 0) 1)
