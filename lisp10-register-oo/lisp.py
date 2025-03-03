@@ -2002,19 +2002,7 @@ RUNTIME = r"""
 ;; }}}
 ;; {{{ def
 
-(special def (lambda (__special_def_funcargs__ & __special_def_body__)
-    (eval (def$ __special_def_funcargs__ __special_def_body__) 1)))
-
-(define def$ (lambda (funcargs body) ( do
-    (if
-        (pair? funcargs)
-        ()
-        (error "def needs a func to define!")
-    )
-    (define f (car funcargs))
-    (define a (cdr funcargs))
-    `(define ,f (lambda (,@a) (do ,@body)))
-)))
+(define def define)
 
 ;; }}}
 ;; {{{ bitwise ops

@@ -109,17 +109,20 @@ GPL license header):
 |lisp05-recursive-fast |Recursive lisp with stdlib built in, under 1k LOC       |1000| 800|0.84|
 |lisp06-recursive-fancy |Recursive lisp with stdlib built in, FFI, quasiquote   |1250|1000|0.86|
 |lisp07-unsafe |lisp06-recursive-fancy with all error checks removed (TOY!)     |1200| 950|0.52|
-|lisp08-fast-lisp04 |From the pwl04 repo, incl. 700 line runtime lib            |2350|1850|1.55|
-|lisp09-register |A fast register-based version, SICP Chap. 5, 750 line runtime |2500|2050|0.67|
-|lisp10-register-oo |Same as lisp09-register but class-based                    |2500|2050|0.69|
+|lisp08-fast-lisp04 |From the pwl04 repo, incl. 700 line runtime lib built in   |1700|1250|1.55|
+|lisp09-register |A fast register-based version, SICP Chap. 5, 750 line runtime |1750|1400|0.67|
+|lisp10-register-oo |Same as lisp09-register but class-based                    |1850|1450|0.60|
 
-The silly benchmark lives in the file `bench.lisp`. FWIW lisp03-trampolined
-is slower partly because (cond) is implemented in terms of (if) and
-(quasiquote). The trampoline overhead is huge. lisp04 through lisp06 implement
-additional primitives and special forms which is why they're so much faster.
+The only rhyme or reason to the code is that I wrote each one after the
+previous one and so it reflects the evolution of my understanding of LISP
+and its implementation in Python. I think they get cleaner and more focused
+as they go, although the optimizations in lisp10 make it a bit uglier than
+lisp09 in spots.
 
 All of the implementations have the following properties/limitations:
 
+- It ain't scheme or common lisp; it's ad-hoc. If you don't like it, make it
+  be what you need it to be
 - No tail-call optimization except for the register-based ones (9 and 10)
 - Syntax and other errors do not include lisp source line numbers
 - The python garbage collector is the lisp GC
@@ -320,6 +323,18 @@ comms between contexts using FFI).
 I did a bit of extra tuning on this one to get it faster than lisp09 (which,
 to be fair, could be optimized that same way to get it faster than lisp10
 again).
+
+I'm working towards a more scheme-y vocabulary and extended some syntax in
+the special forms and primitives. Specifically,
+
+```
+(define  f (lambda (x y) (do a b))) => (define  (f x y) a b)
+(special f (lambda (x y) (do a b))) => (special (f x y) a b)
+(lambda (x y) (do a b))             => (lambda  (x y) a b)
+```
+
+Of course I've been using a quasiquote-based thing called `(def)` for the
+examples so the stdlib contains `(define def define)`.
 
 ---
 ## Notes on the representation of ()...
