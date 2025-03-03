@@ -1167,16 +1167,39 @@ def k_op_cond_last(ctx):
 
 @spcl("define")
 def op_define(ctx):
-    sym, value = ctx.unpack2()
-    ctx.push(symcheck(sym))
+    args = ctx.argl
+    try:
+        sym, args = args
+    except TypeError:
+        raise SyntaxError("need at least 2 args")
+
+    if sym.__class__ is list:
+        sym, params = sym
+        if args[1] is EL:
+            body = args[0]
+        else:
+            body = [ctx.symbol("do"), args]
+        value = Lambda(params, body, ctx.env)
+        ## let ctx.env.set type-check sym as a symbol...
+        ctx.env.set(sym, value)
+        ctx.val = EL
+        return ctx.cont
+
+    try:
+        ctx.exp, args = args
+        if args is not EL:
+            raise TypeError()
+    except TypeError:
+        raise SyntaxError("expected 2 args")
+    ctx.push(sym)
     ctx.push_ce()
     ctx.cont = k_op_define
-    ctx.exp = value
     return k_leval
 
 
 def k_op_define(ctx):
     ctx.pop_ce()
+    ## let ctx.env.set type-check sym as a symbol...
     ctx.env.set(ctx.pop(), ctx.val)
     return ctx.go(EL)
 
@@ -1207,8 +1230,19 @@ def k_op_if(ctx):
 
 @spcl("lambda")
 def op_lambda(ctx):
-    params, body = ctx.unpack2()
-    return ctx.go(Lambda(params, body, ctx.env))
+    args = ctx.argl
+    try:
+        params, args = args
+        if args is EL:
+            raise SyntaxError(f"not enough args")
+        if args[1] is EL:
+            body = args[0]
+        else:
+            body = [ctx.symbol("do"), args]
+    except TypeError:
+        raise SyntaxError(f"expected args list, got {args!r}")
+    ctx.val = Lambda(params, body, ctx.env)
+    return ctx.cont
 
 
 @spcl("quote")
@@ -1246,11 +1280,34 @@ def k_op_setbang(ctx):
 
 @spcl("special")
 def op_special(ctx):
-    sym, value = ctx.unpack2()
-    ctx.push(symcheck(sym))
+    args = ctx.argl
+    try:
+        sym, args = args
+    except TypeError:
+        raise SyntaxError("need at least 2 args")
+
+    if sym.__class__ is list:
+        sym, params = sym
+        if args[1] is EL:
+            body = args[0]
+        else:
+            body = [ctx.symbol("do"), args]
+        value = Lambda(params, body, ctx.env)
+        value.special = True
+        ## let ctx.env.set type-check sym as a symbol...
+        ctx.env.set(sym, value)
+        ctx.val = EL
+        return ctx.cont
+
+    try:
+        ctx.exp, args = args
+        if args is not EL:
+            raise TypeError()
+    except TypeError:
+        raise SyntaxError("expected 2 args")
+    ctx.push(sym)  ## let ctx.env.set type-check sym
     ctx.push_ce()
     ctx.cont = k_op_special
-    ctx.exp = value
     return k_leval
 
 
