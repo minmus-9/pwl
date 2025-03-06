@@ -17,7 +17,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"lcore.py -- trampolined lisp core"
+"lcore.py -- lisp core"
 
 ## pylint: disable=invalid-name
 ## XXX pylint: disable=missing-docstring
@@ -33,9 +33,7 @@ __all__ = (
     "Context",
     "EL",
     "Parser",
-    "Queue",
     "SENTINEL",
-    "Scanner",
     "Symbol",
     "T",
     "car",
@@ -50,7 +48,8 @@ __all__ = (
     "ffi",
     "glbl",
     "is_atom",
-    "listcheck",
+    "k_leval",
+    "k_stringify",
     "load",
     "main",
     "parse",
@@ -275,6 +274,9 @@ class Context:
 
     def push_ce(self):
         self.s = [self.env, [self.cont, self.s]]
+
+    def top(self):
+        return self.s[0]
 
     ## trampoline
 
@@ -563,23 +565,16 @@ def k_leval_last(ctx):
 
 
 ## }}}
-## {{{ queue
+## {{{ list builder
 
 
-class Queue:
+class ListBuilder:
     __slots__ = ("h", "t")
 
     def __init__(self):
         self.h = self.t = EL
 
-    def dequeue(self):
-        n = self.h
-        self.h = n[1]
-        if self.h is EL:
-            self.t = EL
-        return n[0]
-
-    def enqueue(self, x):
+    def append(self, x):
         n = [x, EL]
         if self.h is EL:
             self.h = n
@@ -587,7 +582,7 @@ class Queue:
             self.t[1] = n
         self.t = n
 
-    def head(self):
+    def get(self):
         return self.h
 
 
@@ -660,7 +655,7 @@ def k_py_value_to_lisp_value(ctx):
         return ctx.cont
 
     ctx.push(ctx.cont)
-    ctx.push(Queue())
+    ctx.push(ListBuilder())
     return k_pv2lv_setup(ctx, list(x))
 
 
@@ -674,9 +669,9 @@ def k_pv2lv_setup(ctx, args):
 def k_pv2lv_next(ctx):
     args = ctx.pop()
     argl = ctx.pop()
-    argl.enqueue(ctx.val)
+    argl.append(ctx.val)
     if not args:
-        ctx.val = argl.head()
+        ctx.val = argl.get()
         return ctx.pop()
     ctx.push(argl)
     return k_pv2lv_setup(ctx, args)
@@ -858,10 +853,10 @@ class Parser:
             self.add(self.ctx.symbol(token))
         elif ttype == s.T_LPAR:
             self.qstack.append(")")
-            self.stack.append(Queue())
+            self.stack.append(ListBuilder())
         elif ttype == s.T_RPAR:
             del self.qstack[-1]
-            l = self.quote_wrap(self.stack.pop().head())
+            l = self.quote_wrap(self.stack.pop().get())
             if self.stack:
                 self.add(l)
             else:
@@ -878,7 +873,7 @@ class Parser:
     def add(self, x):
         if not self.stack:
             raise SyntaxError(f"expected '(' got {x!r}")
-        self.stack[-1].enqueue(self.quote_wrap(x))
+        self.stack[-1].append(self.quote_wrap(x))
 
     def quote_wrap(self, x):
         while self.qstack and self.qstack[-1].__class__ is Symbol:
