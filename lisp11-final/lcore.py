@@ -342,7 +342,9 @@ def create_continuation(ctx):
     s = ctx.save()
 
     def continuation(ctx):
+        x = ctx.unpack1()
         ctx.restore(s)
+        ctx.val = x
         return ctx.cont
 
     continuation.special = continuation.ffi = False
@@ -987,6 +989,7 @@ def main(ctx=None, force_repl=False):
             raise SystemExit(repl(ctx, callback))
     finally:
         ## debug code can go here
+        assert ctx.s is EL, ctx.s
         pass
 
 

@@ -242,10 +242,8 @@ def k_op_special(ctx):
     sym = ctx.pop()
     ctx.pop_ce()
     proc = ctx.val
-    try:
-        _ = proc.__call__
-    except AttributeError:
-        raise SyntaxError("expected proc") from None
+    if not callable(proc):
+        raise SyntaxError("expected proc")
     proc.special = True
     ctx.env[sym] = proc
     ctx.val = EL
@@ -460,8 +458,8 @@ def op_eval(ctx):
     try:
         x = ctx.unpack1()
         n_up = 0
-    except TypeError:
-        ctx.exp, n_up = ctx.unpack2()
+    except SyntaxError:
+        x, n_up = ctx.unpack2()
     if x.__class__ is str:
         l = []
         parse(ctx, x, l.append)
@@ -635,9 +633,9 @@ def op_while(ctx):
     ctx.push(ctx.cont)
     ctx.push(x)
     ctx.push(ctx.env)
-    ctx.exp = x
+    ctx.argl = EL
     ctx.cont = k_op_while
-    return k_leval
+    return x
 
 
 def k_op_while(ctx):
@@ -648,9 +646,9 @@ def k_op_while(ctx):
         ctx.pop()  ## x
         return ctx.pop()
     ctx.push(ctx.env)
-    ctx.exp = x
+    ctx.argl = EL
     ctx.cont = k_op_while
-    return k_leval
+    return x
 
 
 ## }}}
