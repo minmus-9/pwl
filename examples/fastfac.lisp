@@ -1,7 +1,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; fast factorial -- i ran across something like this somewhere on the
 ;;                   net... was an example of not having to use (define)
-;;                   to create a recursive function iirc
+;;                   to create a recursive function iirc. the wikipedia
+;;                   page for lambda calculus shows this technique as
+;;                   well
 ;;
 ;; all of the lisps here can run this code as-is
 
